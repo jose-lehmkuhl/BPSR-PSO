@@ -747,6 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.clearData = clearData;
+window.relaunchApp = () => { try { window.electronAPI.relaunchApp(); } catch (e) { location.reload(); } };
 window.togglePause = togglePause;
 window.toggleSettings = toggleSettings;
 window.closeClient = closeClient;

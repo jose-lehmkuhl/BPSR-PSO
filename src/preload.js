@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setHotkeys: (payload) => ipcRenderer.invoke('set-hotkeys', payload),
     openBreakdown: (payload) => ipcRenderer.send('open-breakdown', payload),
     onBreakdownLoad: (callback) => ipcRenderer.on('breakdown-load', (_event, payload) => callback(payload)),
+    relaunchApp: () => ipcRenderer.send('relaunch-app'),
 });

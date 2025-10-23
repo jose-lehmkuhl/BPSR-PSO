@@ -18,3 +18,8 @@ ipcMain.handle('set-hotkeys', (event, payload) => {
 ipcMain.on('open-breakdown', (event, payload) => {
     createBreakdownWindow(payload || {});
 });
+
+ipcMain.on('relaunch-app', () => {
+    app.relaunch();
+    app.exit(0);
+});
