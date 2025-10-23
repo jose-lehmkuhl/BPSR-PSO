@@ -44,8 +44,6 @@ const opacitySlider = document.getElementById('opacitySlider');
 const hkClickthrough = document.getElementById('hkClickthrough');
 const hkToggleWindow = document.getElementById('hkToggleWindow');
 const saveHotkeysBtn = document.getElementById('saveHotkeysBtn');
-const clearIdentitiesBtn = document.getElementById('clearIdentitiesBtn');
-const onlyEliteDummy = document.getElementById('onlyEliteDummy');
 
 let allUsers = {};
 let allEnemies = {};
@@ -374,28 +372,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('Failed to save hotkeys', e);
                 alert('Failed to save hotkeys');
             }
-        });
-    }
-    if (clearIdentitiesBtn) {
-        clearIdentitiesBtn.addEventListener('click', async () => {
-            try {
-                await fetch(`http://${SERVER_URL}/api/clear-identities`, { method: 'POST' });
-                alert('Identities cleared. They will be re-detected as combat continues.');
-            } catch (e) {
-                console.error('Failed to clear identities', e);
-                alert('Failed to clear identities');
-            }
-        });
-    }
-    if (onlyEliteDummy) {
-        // Load current
-        fetch(`http://${SERVER_URL}/api/settings`).then(r=>r.json()).then((resp)=>{
-            if (resp?.data) onlyEliteDummy.checked = !!resp.data.onlyRecordEliteDummy;
-        });
-        onlyEliteDummy.addEventListener('change', async () => {
-            try {
-                await fetch(`http://${SERVER_URL}/api/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ onlyRecordEliteDummy: !!onlyEliteDummy.checked }) });
-            } catch {}
         });
     }
     function setActive(btn){ [modeDpsBtn,modeHpsBtn,modeTankingBtn,modeNpcTankingBtn].forEach(b=> b&&b.classList.remove('active')); btn&&btn.classList.add('active'); }

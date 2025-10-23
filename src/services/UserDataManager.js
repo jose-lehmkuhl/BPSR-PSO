@@ -142,7 +142,6 @@ class UserDataManager {
 
     addDamage(uid, skillId, element, damage, isCrit, isLucky, isCauseLucky, hpLessenValue = 0, targetUid) {
         if (config.IS_PAUSED) return;
-        if (config.GLOBAL_SETTINGS.onlyRecordEliteDummy && targetUid !== 75) return;
         this.checkTimeoutClear();
         const user = this.getUser(uid);
         user.addDamage(skillId, element, damage, isCrit, isLucky, isCauseLucky, hpLessenValue);
