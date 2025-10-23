@@ -395,12 +395,15 @@ class UserDataManager {
                     if (taken > topVal) { topVal = taken; topId = eid; }
                 }
                 const topName = topId != null ? (this.enemyCache.name.get(topId) || `#${topId}`) : '';
+                const mm = String(Math.floor((summary.duration || 0) / 60000)).padStart(2, '0');
+                const ss = String(Math.floor(((summary.duration || 0) % 60000) / 1000)).padStart(2, '0');
                 const meta = {
                     name: topName,
                     targetCount: this.enemiesTaken.size,
                     durationMs: summary.duration,
                     startTime: summary.startTime,
                     endTime: summary.endTime,
+                    label: `${topName || 'Encounter'} [${mm}:${ss}]`,
                 };
                 await fsPromises.writeFile(path.join(logDir, 'encounter_meta.json'), JSON.stringify(meta, null, 2), 'utf8');
             } catch {}

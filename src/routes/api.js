@@ -142,6 +142,7 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                         topEnemyName: meta.name || '',
                         targetCount: meta.targetCount || 0,
                         durationMs: meta.durationMs || 0,
+                        label: meta.label || '',
                     },
                 });
             } catch {}

@@ -512,12 +512,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Fetch meta to label as Name(Targets) [mm:ss]
                         fetch(`http://${SERVER_URL}/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
                             if (meta?.code === 0 && meta.data) {
-                                const name = meta.data.topEnemyName || ts;
-                                const targets = meta.data.targetCount || 0;
-                                const dur = meta.data.durationMs || 0;
-                                const mm = String(Math.floor(dur/60000)).padStart(2,'0');
-                                const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
-                                opt.textContent = `${name}(${targets}) [${mm}:${ss}]`;
+                                if (meta.data.label) {
+                                    opt.textContent = meta.data.label;
+                                } else {
+                                    const name = meta.data.topEnemyName || ts;
+                                    const targets = meta.data.targetCount || 0;
+                                    const dur = meta.data.durationMs || 0;
+                                    const mm = String(Math.floor(dur/60000)).padStart(2,'0');
+                                    const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
+                                    opt.textContent = `${name}(${targets}) [${mm}:${ss}]`;
+                                }
                             }
                         }).catch(()=>{});
                         encounterSelect.appendChild(opt);
