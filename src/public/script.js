@@ -173,8 +173,8 @@ function renderDataList(users) {
             </div>
             ${mode === 'hps' ? '' : subBarHtml}
         `;
-        // Attach breakdown click for DPS/HPS rows
-        item.querySelector('.main-bar').addEventListener('click', () => {
+        // Attach breakdown click for DPS/HPS rows (anywhere on the item)
+        item.addEventListener('click', () => {
             if (rankingMode === 'tanking' || rankingMode === 'npc') return;
             openBreakdown(user);
         });
@@ -429,24 +429,45 @@ function openBreakdown(user) {
         if (!(resp?.code === 0 && resp.data)) return;
         const data = resp.data;
         const skills = data.skills || {};
-        const skillEntries = Object.entries(skills).map(([sid, s]) => ({ id: sid, name: s.displayName ?? sid, total: s.totalDamage, count: s.totalCount }));
-        const totalSum = skillEntries.reduce((s, e)=> s + (e.total||0), 0) || 1;
-        skillEntries.sort((a,b)=> (b.total||0) - (a.total||0));
-        breakdownTitle.textContent = `${data.name || ('#'+uid)} — ${rankingMode === 'hps' ? 'Healing' : 'Damage'} Breakdown`;
-        breakdownBody.innerHTML = '';
-        for (const entry of skillEntries) {
-            const row = document.createElement('div');
-            row.className = 'skill-row';
-            const pct = ((entry.total||0) / totalSum) * 100;
-            row.innerHTML = `
-                <div class="left">
-                    <span>${entry.name}</span>
-                </div>
-                <div class="skill-bar"><div style="width:${pct.toFixed(2)}%"></div></div>
-                <div>${formatNumber(entry.total||0)} (${pct.toFixed(1)}%)</div>
-            `;
-            breakdownBody.appendChild(row);
+        const totalSum = Object.values(skills).reduce((s, v)=> s + (v.totalDamage||0), 0) || 1;
+        const activeSeconds = Math.max(1, Math.floor((lastCombatTs && fightStartTs) ? (Math.max(0, (currentEncounter==='current' ? Date.now() : lastCombatTs) - fightStartTs)/1000) : 1));
+        const rows = Object.entries(skills).map(([sid, s]) => {
+            const total = s.totalDamage || 0;
+            const dps = total / activeSeconds;
+            const count = s.totalCount || 0;
+            const critRate = s.critRate != null ? s.critRate : (s.totalCount ? (s.critCount || 0)/s.totalCount : 0);
+            const avg = count ? total / count : 0;
+            const pct = totalSum ? (total / totalSum) * 100 : 0;
+            return { id: sid, name: s.displayName ?? sid, total, dps, count, critRate, avg, pct };
+        }).sort((a,b)=> b.total - a.total);
+
+        // Header
+        const headerName = data.name || ('#'+uid);
+        const headerProf = data.profession || '';
+        const headerFp = (data.attr?.fightPoint || data.fightPoint) ? ` | AP ${data.attr?.fightPoint || data.fightPoint}` : '';
+        breakdownTitle.textContent = `${headerName}${headerProf ? ' — ' + headerProf : ''}${headerFp}`;
+
+        // Table
+        const tableHtml = [
+            '<div class="bd-header"><span class="title">Skill Breakdown</span><span>Active: '+activeSeconds+'s <span class="bd-badge">'+formatNumber(totalSum)+' total</span></span></div>',
+            '<table class="bd-table">',
+            '<thead><tr>',
+            '<th>Skill</th><th style="text-align:right">Total</th><th style="text-align:right">DPS</th><th style="text-align:right">Hits</th><th style="text-align:right">Crit%</th><th style="text-align:right">Avg/Hit</th><th style="text-align:right">%</th>',
+            '</tr></thead><tbody>'
+        ];
+        for (const r of rows) {
+            tableHtml.push('<tr>');
+            tableHtml.push('<td>'+r.name+'</td>');
+            tableHtml.push('<td style="text-align:right">'+formatNumber(r.total)+'</td>');
+            tableHtml.push('<td style="text-align:right">'+formatNumber(r.dps)+'</td>');
+            tableHtml.push('<td style="text-align:right">'+r.count+'</td>');
+            tableHtml.push('<td style="text-align:right">'+(r.critRate*100).toFixed(1)+'%</td>');
+            tableHtml.push('<td style="text-align:right">'+formatNumber(r.avg)+'</td>');
+            tableHtml.push('<td style="text-align:right">'+r.pct.toFixed(1)+'%</td>');
+            tableHtml.push('</tr>');
         }
+        tableHtml.push('</tbody></table>');
+        breakdownBody.innerHTML = tableHtml.join('');
         breakdownModal.classList.remove('hidden');
     }).catch(()=>{});
 }
