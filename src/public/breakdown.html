@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Breakdown</title>
+    <title>DPS Breakdown</title>
     <link rel="stylesheet" href="style.css" />
     <style>
       body { background:#111; margin:0; color:#fff; font-family: 'Roboto Condensed', sans-serif; }
@@ -11,6 +11,9 @@
       .hdr { display:flex; align-items:center; justify-content: space-between; margin-bottom:8px; }
       .title { font-size: 16px; font-weight: 700; }
       .sub { color:#ccc; font-size:12px; }
+      .grid { display:flex; gap:16px; align-items:flex-start; }
+      .left { width: 280px; flex: 0 0 280px; }
+      .right { flex:1 1 auto; min-width: 0; }
       .bd-table { width:100%; border-collapse: collapse; font-size:12px; }
       .bd-table thead th { position: sticky; top: 0; background: #151515; color:#ddd; text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.15); }
       .bd-table tbody td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
@@ -20,16 +23,39 @@
   <body>
     <div class="wrap">
       <div class="hdr">
-        <div class="title" id="tTitle">Breakdown</div>
+        <div class="title" id="tTitle">DPS Breakdown</div>
         <div class="sub" id="tMeta"></div>
       </div>
-      <table class="bd-table" id="tTable"><thead>
-        <tr><th>Skill</th><th style="text-align:right">Total</th><th style="text-align:right">DPS</th><th style="text-align:right">Hits</th><th style="text-align:right">Crit%</th><th style="text-align:right">Avg/Hit</th><th style="text-align:right">%</th></tr>
-      </thead><tbody id="tBody"></tbody></table>
+      <div class="grid">
+        <div class="left">
+          <canvas id="pie" width="260" height="260" style="background:#0d0d0d; border:1px solid rgba(255,255,255,0.1); border-radius:6px;"></canvas>
+        </div>
+        <div class="right">
+          <table class="bd-table" id="tTable"><thead>
+            <tr><th>Skill</th><th style="text-align:right">Total</th><th style="text-align:right">DPS</th><th style="text-align:right">Hits</th><th style="text-align:right">Crit%</th><th style="text-align:right">Avg/Hit</th><th style="text-align:right">%</th></tr>
+          </thead><tbody id="tBody"></tbody></table>
+        </div>
+      </div>
     </div>
     <script>
       const SERVER_URL = 'localhost:8990';
       function fmt(n){ if(n>=1e6)return (n/1e6).toFixed(1)+'M'; if(n>=1e3)return (n/1e3).toFixed(1)+'K'; return Math.round(n).toString(); }
+      function drawPie(rows,total){
+        const canvas = document.getElementById('pie');
+        if(!canvas) return; const ctx = canvas.getContext('2d');
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        const cx = canvas.width/2, cy = canvas.height/2, r = Math.min(cx, cy)-8;
+        let start = -Math.PI/2;
+        const colors = [ '#4caf50','#2196f3','#ff9800','#9c27b0','#00bcd4','#e91e63','#8bc34a','#ffc107','#03a9f4','#795548' ];
+        rows.forEach((row, i)=>{
+          const angle = (row.sum/total)*Math.PI*2;
+          ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,start,start+angle,false); ctx.closePath();
+          ctx.fillStyle = colors[i % colors.length]; ctx.fill();
+          start += angle;
+        });
+        // center hole slight shading for aesthetics
+        ctx.beginPath(); ctx.arc(cx,cy, r*0.5, 0, Math.PI*2); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
+      }
       window.electronAPI.onBreakdownLoad(async ({ uid, timestamp }) => {
         try{
           const isHist = !!timestamp && timestamp !== 'current';
@@ -43,14 +69,25 @@
           document.getElementById('tTitle').textContent = `${name}${prof?(' — '+prof):''}`;
           const skills = d.skills || {};
           const total = Object.values(skills).reduce((s,v)=> s + (v.totalDamage||0), 0) || 1;
-          document.getElementById('tMeta').textContent = `${fmt(total)} total`;
+          let activeSeconds = null;
+          if (isHist) {
+            // try use summary for precise duration
+            try{
+              const sumRes = await fetch(`http://${SERVER_URL}/api/history/${timestamp}/summary`);
+              const sumJs = await sumRes.json();
+              if (sumJs && sumJs.code===0 && sumJs.data && sumJs.data.duration) {
+                activeSeconds = Math.max(1, Math.floor(sumJs.data.duration/1000));
+              }
+            }catch{}
+          }
+          document.getElementById('tMeta').textContent = `${fmt(total)} total${activeSeconds? ' • '+activeSeconds+'s':''}`;
           const rows = Object.entries(skills).map(([sid, s])=>{
             const sum = s.totalDamage||0; const cnt = s.totalCount||0; const avg = cnt? sum/cnt:0; const cr = s.critRate!=null? s.critRate : (cnt? (s.critCount||0)/cnt:0); return {name: s.displayName||sid, sum, cnt, avg, cr, pct: (sum/total)*100};
           }).sort((a,b)=> b.sum-a.sum);
+          drawPie(rows, total);
           const tb = document.getElementById('tBody'); tb.innerHTML='';
-          // Estimate active seconds from dps if available; otherwise omit DPS
-          let activeSeconds = null;
-          if(d.total_dps && total){ activeSeconds = total / d.total_dps; }
+          // Estimate active seconds from total DPS if available when live
+          if(!activeSeconds && d.total_dps && total){ activeSeconds = Math.max(1, Math.floor(total / d.total_dps)); }
           for(const r of rows){
             const tr = document.createElement('tr');
             tr.innerHTML = `<td>${r.name}</td><td style="text-align:right">${fmt(r.sum)}</td><td style="text-align:right">${activeSeconds? fmt(r.sum/activeSeconds): '-'}</td><td style="text-align:right">${r.cnt}</td><td style="text-align:right">${(r.cr*100).toFixed(1)}%</td><td style="text-align:right">${fmt(r.avg)}</td><td style="text-align:right">${r.pct.toFixed(1)}%</td>`;

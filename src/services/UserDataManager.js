@@ -262,6 +262,7 @@ class UserDataManager {
             uid: user.uid,
             name: user.name,
             profession: user.profession + (user.subProfession ? `-${user.subProfession}` : ''),
+            total_dps: user.getTotalDps(),
             skills: user.getSkillSummary(),
             attr: user.attr,
         };
@@ -371,6 +372,7 @@ class UserDataManager {
                     uid: user.uid,
                     name: user.name,
                     profession: user.profession + (user.subProfession ? `-${user.subProfession}` : ''),
+                    total_dps: user.getTotalDps(),
                     skills: user.getSkillSummary(),
                     attr: user.attr,
                 };
