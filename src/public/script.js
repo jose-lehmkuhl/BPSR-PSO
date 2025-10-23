@@ -289,6 +289,11 @@ async function clearData() {
         if (result.code === 0) {
             allUsers = {};
             userColors = {};
+            // Reset fight timer state on manual clear
+            fightStartTs = 0;
+            lastCombatTs = 0;
+            lastTotals = { dmg: 0, heal: 0 };
+            lastPerUser = {};
             updateAll();
             showServerStatus('cleared');
             console.log('Data cleared successfully.');
