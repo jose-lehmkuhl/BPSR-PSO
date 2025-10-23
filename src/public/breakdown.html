@@ -28,10 +28,9 @@
       </thead><tbody id="tBody"></tbody></table>
     </div>
     <script>
-      const { ipcRenderer } = require('electron');
       const SERVER_URL = 'localhost:8990';
       function fmt(n){ if(n>=1e6)return (n/1e6).toFixed(1)+'M'; if(n>=1e3)return (n/1e3).toFixed(1)+'K'; return Math.round(n).toString(); }
-      ipcRenderer.on('breakdown-load', async (_ev, { uid, timestamp }) => {
+      window.electronAPI.onBreakdownLoad(async ({ uid, timestamp }) => {
         try{
           const isHist = !!timestamp && timestamp !== 'current';
           const base = isHist ? `http://${SERVER_URL}/api/history/${timestamp}` : `http://${SERVER_URL}/api`;
