@@ -300,6 +300,8 @@ export class PacketProcessor {
                         hpLessenValue.toNumber(),
                         targetUuid.toNumber()
                     );
+                    // Track NPC tanking based on hpLessenValue when available (fallback to damage)
+                    userDataManager.addEnemyTaken(targetUid = targetUuid.toNumber(), hpLessenValue.toNumber(), damage.toNumber());
                 }
                 if (isDead) {
                     userDataManager.deleteEnemyData(targetUuid.toNumber());

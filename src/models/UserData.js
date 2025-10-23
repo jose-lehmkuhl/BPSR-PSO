@@ -41,6 +41,11 @@ function getSubProfessionBySkillId(skillId) {
         case 1405:
         case 1418:
             return '(Skyward)';
+        // Wind Knight additions: prefer Vanguard over Skyward when both appear
+        case 1417:
+            return '(Vanguard)';
+        case 1420:
+            return '(Vanguard)';
         case 2405:
             return '(Shield)';
         case 2406:
@@ -71,6 +76,9 @@ export class UserData {
         this.subProfession = '';
         this.attr = {};
         this.lastUpdateTime = Date.now();
+
+        // Track spec confidence per skill id
+        this.specScores = new Map();
     }
 
     _touch() {
@@ -98,7 +106,19 @@ export class UserData {
 
         const subProfession = getSubProfessionBySkillId(skillId);
         if (subProfession) {
-            this.setSubProfession(subProfession);
+            const prev = this.specScores.get(subProfession) || 0;
+            this.specScores.set(subProfession, prev + 1);
+            // prefer higher score; if tie, keep current
+            let top = this.subProfession;
+            let topScore = this.specScores.get(top) || 0;
+            for (const [sp, sc] of this.specScores) {
+                if (sc > topScore) {
+                    top = sp; topScore = sc;
+                }
+            }
+            if (top && top !== this.subProfession) {
+                this.setSubProfession(top);
+            }
         }
     }
 
@@ -123,7 +143,18 @@ export class UserData {
 
         const subProfession = getSubProfessionBySkillId(skillId - 1000000000);
         if (subProfession) {
-            this.setSubProfession(subProfession);
+            const prev = this.specScores.get(subProfession) || 0;
+            this.specScores.set(subProfession, prev + 1);
+            let top = this.subProfession;
+            let topScore = this.specScores.get(top) || 0;
+            for (const [sp, sc] of this.specScores) {
+                if (sc > topScore) {
+                    top = sp; topScore = sc;
+                }
+            }
+            if (top && top !== this.subProfession) {
+                this.setSubProfession(top);
+            }
         }
     }
 

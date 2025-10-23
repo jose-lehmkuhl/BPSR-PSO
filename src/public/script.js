@@ -196,7 +196,7 @@ function processDataUpdate(data) {
             id: userId,
         };
 
-        const hasNewValidName = newUser.name && typeof newUser.name === 'string' && newUser.name !== '未知';
+        const hasNewValidName = newUser.name && typeof newUser.name === 'string';
         if (hasNewValidName) {
             updatedUser.name = newUser.name;
         } else if (!existingUser.name || existingUser.name === '...') {

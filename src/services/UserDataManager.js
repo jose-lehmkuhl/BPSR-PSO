@@ -28,6 +28,9 @@ class UserDataManager {
             maxHp: new Map(),
         };
 
+        // Track total damage taken per enemy (for NPC tanking view)
+        this.enemiesTaken = new Map();
+
         // 自动保存
         this.lastAutoSaveTime = 0;
         this.lastLogTime = 0;
@@ -284,6 +287,7 @@ class UserDataManager {
                 name: this.enemyCache.name.get(id),
                 hp: this.enemyCache.hp.get(id),
                 max_hp: this.enemyCache.maxHp.get(id),
+                taken_total: this.enemiesTaken.get(id) || 0,
             };
         });
         return result;
@@ -293,12 +297,14 @@ class UserDataManager {
         this.enemyCache.name.delete(id);
         this.enemyCache.hp.delete(id);
         this.enemyCache.maxHp.delete(id);
+        this.enemiesTaken.delete(id);
     }
 
     refreshEnemyCache() {
         this.enemyCache.name.clear();
         this.enemyCache.hp.clear();
         this.enemyCache.maxHp.clear();
+        this.enemiesTaken.clear();
     }
 
     clearAll() {
@@ -309,6 +315,13 @@ class UserDataManager {
         this.lastAutoSaveTime = 0;
         this.lastLogTime = 0;
         this.saveAllUserData(usersToSave, saveStartTime);
+    }
+
+    addEnemyTaken(targetUid, hpLessenValue, damageValue) {
+        const addVal = (hpLessenValue && hpLessenValue > 0) ? hpLessenValue : (damageValue || 0);
+        if (addVal <= 0) return;
+        const prev = this.enemiesTaken.get(targetUid) || 0;
+        this.enemiesTaken.set(targetUid, prev + addVal);
     }
 
     getUserIds() {
