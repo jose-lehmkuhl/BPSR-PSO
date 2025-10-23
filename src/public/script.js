@@ -82,6 +82,7 @@ let lastCombatTs = 0;
 let lastTotals = { dmg: 0, heal: 0 };
 let lastPerUser = {}; // no longer used for resets; kept for potential future use
 let currentEncounter = 'current';
+let wasOnCurrentEncounter = true;
 let historicalUsers = null;
 let historicalEnemies = null;
 
@@ -512,23 +513,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 toRemove.forEach(opt => opt.remove());
                 // Rebuild in order
                 for (const ts of list) {
-                    const opt = document.createElement('option');
-                    opt.value = ts; opt.textContent = ts;
-                    encounterSelect.appendChild(opt);
                     // Fetch meta to label as Name(Targets) [mm:ss]
                     fetch(`http://${SERVER_URL}/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
-                        if (meta?.code === 0 && meta.data) {
-                            if (meta.data.label) {
-                                opt.textContent = meta.data.label;
-                            } else {
-                                const name = meta.data.topEnemyName || ts;
-                                const targets = meta.data.targetCount || 0;
-                                const dur = meta.data.durationMs || 0;
-                                const mm = String(Math.floor(dur/60000)).padStart(2,'0');
-                                const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
-                                opt.textContent = `${name}(${targets}) [${mm}:${ss}]`;
-                            }
+                        if (!(meta?.code === 0 && meta.data)) return;
+                        let labelText = '';
+                        if (meta.data.label) {
+                            labelText = meta.data.label;
+                        } else {
+                            const name = meta.data.topEnemyName || '';
+                            const targets = meta.data.targetCount || 0;
+                            const dur = meta.data.durationMs || 0;
+                            const mm = String(Math.floor(dur/60000)).padStart(2,'0');
+                            const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
+                            labelText = `${name || 'Encounter'}(${targets}) [${mm}:${ss}]`;
                         }
+                        // Filter out empty/placeholder encounters
+                        const head = labelText.split('(')[0].trim();
+                        if (!head || head === 'Encounter') return;
+                        const opt = document.createElement('option');
+                        opt.value = ts; opt.textContent = labelText;
+                        encounterSelect.appendChild(opt);
                     }).catch(()=>{});
                 }
                 // Restore selection if possible
@@ -546,11 +550,17 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshEncounters();
         setInterval(refreshEncounters, 5000);
         encounterSelect.addEventListener('change', async (e)=>{
-            currentEncounter = e.target.value || 'current';
+            const nextEncounter = e.target.value || 'current';
+            // If leaving current to view a historical encounter, end the current encounter immediately
+            if (wasOnCurrentEncounter && nextEncounter !== 'current') {
+                fetch(`http://${SERVER_URL}/api/clear`).catch(()=>{});
+            }
+            currentEncounter = nextEncounter;
             if (currentEncounter === 'current') {
                 historicalUsers = null;
                 historicalEnemies = null;
                 updateAll();
+                wasOnCurrentEncounter = true;
                 return;
             }
             try {
@@ -565,6 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         historicalEnemies = Object.entries(json.enemies).map(([id, e])=> ({ id, ...e }));
                     } else { historicalEnemies = []; }
                     updateAll();
+                    wasOnCurrentEncounter = false;
                 }
             } catch {}
         });
