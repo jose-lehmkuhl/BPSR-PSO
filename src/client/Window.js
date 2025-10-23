@@ -68,6 +68,7 @@ class Window {
                 lastHeight: this.config.lastHeight,
                 clickthroughHotkey: this.config.clickthroughHotkey,
                 toggleWindowHotkey: this.config.toggleWindowHotkey,
+                clearHotkey: this.config.clearHotkey,
             };
             fs.writeFileSync(configPath, JSON.stringify(configData, null, 4));
         } catch (error) {
@@ -104,6 +105,8 @@ class Window {
         this._window.loadFile(htmlPath);
 
         this._window.on('close', () => this._saveConfig());
+        this._window.on('move', () => this._saveConfig());
+        this._window.on('resize', () => this._saveConfig());
         this._window.on('closed', () => (this._window = null));
         this._window.webContents.on('did-finish-load', () => {
             if (this.config.passthrough) {

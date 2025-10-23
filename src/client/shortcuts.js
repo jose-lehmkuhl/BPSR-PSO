@@ -1,4 +1,4 @@
-import { globalShortcut } from 'electron';
+import { globalShortcut, app } from 'electron';
 import window from './Window.js';
 
 const RESIZE_INCREMENT = 20;
@@ -30,9 +30,8 @@ function registerDynamicHotkeys() {
     }
     if (clearHotkey) {
         globalShortcut.register(clearHotkey, () => {
-            // trigger renderer to clear
-            const web = window.getWindow().webContents;
-            web.executeJavaScript('window.clearData && window.clearData();');
+            // Relaunch the app (same effect as pressing the Refresh button)
+            try { app.relaunch(); app.exit(0); } catch (_) {}
         });
     }
 }
