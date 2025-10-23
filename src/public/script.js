@@ -247,15 +247,17 @@ function processDataUpdate(data) {
     const increased = sumDmg > lastTotals.dmg || sumHeal > lastTotals.heal;
     if (increased) {
         const oocSec = parseInt(oocTimer?.value || '15', 10);
-        if (anyDecrease || (fightStartTs && lastCombatTs && (nowTs - lastCombatTs) >= oocSec * 1000)) {
-            // New fight starting after OOC window: reset timer baseline
-            fightStartTs = nowTs;
-            lastTotals = { dmg: sumDmg, heal: sumHeal };
-            // reset per-user baselines
+        const newFightDetected = anyDecrease || (fightStartTs && lastCombatTs && (nowTs - lastCombatTs) >= oocSec * 1000);
+        if (newFightDetected) {
+            // Force server clear at the start of the next fight, then reset local baselines and skip this frame
+            fetch(`http://${SERVER_URL}/api/clear`).catch(() => {});
+            allUsers = {};
+            userColors = {};
+            fightStartTs = 0;
+            lastCombatTs = 0;
+            lastTotals = { dmg: 0, heal: 0 };
             lastPerUser = {};
-            for (const [uid, u] of Object.entries(allUsers)) {
-                lastPerUser[uid] = { d: (u.total_damage?.total)||0, h: (u.total_healing?.total)||0 };
-            }
+            return; // wait for next update to start fresh
         } else if (!fightStartTs) {
             fightStartTs = nowTs;
         }
