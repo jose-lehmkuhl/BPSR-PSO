@@ -59,6 +59,7 @@ const WEBSOCKET_RECONNECT_INTERVAL = 5000;
 let fightStartTs = 0;
 let lastCombatTs = 0;
 let lastTotals = { dmg: 0, heal: 0 };
+let lastPerUser = {};
 
 const SERVER_URL = 'localhost:8990';
 
@@ -231,23 +232,39 @@ function processDataUpdate(data) {
         allUsers[userId] = updatedUser;
     }
 
-    // Combat timing: detect activity only when totals increase (not just > 0)
+    // Detect per-user decreases (new fight started after server clear but first payload not empty)
     const nowTs = Date.now();
     const sumDmg = Object.values(allUsers).reduce((s,u)=> s + ((u.total_damage?.total)||0), 0);
     const sumHeal = Object.values(allUsers).reduce((s,u)=> s + ((u.total_healing?.total)||0), 0);
+    let anyDecrease = false;
+    for (const [uid, u] of Object.entries(allUsers)) {
+        const prev = lastPerUser[uid] || { d: 0, h: 0 };
+        const d = (u.total_damage?.total)||0;
+        const h = (u.total_healing?.total)||0;
+        if (d < prev.d || h < prev.h) { anyDecrease = true; break; }
+    }
+    // Combat timing: detect activity only when totals increase (not just > 0)
     const increased = sumDmg > lastTotals.dmg || sumHeal > lastTotals.heal;
     if (increased) {
         const oocSec = parseInt(oocTimer?.value || '15', 10);
-        if (fightStartTs && lastCombatTs && (nowTs - lastCombatTs) >= oocSec * 1000) {
+        if (anyDecrease || (fightStartTs && lastCombatTs && (nowTs - lastCombatTs) >= oocSec * 1000)) {
             // New fight starting after OOC window: reset timer baseline
             fightStartTs = nowTs;
             lastTotals = { dmg: sumDmg, heal: sumHeal };
+            // reset per-user baselines
+            lastPerUser = {};
+            for (const [uid, u] of Object.entries(allUsers)) {
+                lastPerUser[uid] = { d: (u.total_damage?.total)||0, h: (u.total_healing?.total)||0 };
+            }
         } else if (!fightStartTs) {
             fightStartTs = nowTs;
         }
         lastCombatTs = nowTs;
         // Update baseline after processing
         lastTotals = { dmg: sumDmg, heal: sumHeal };
+        for (const [uid, u] of Object.entries(allUsers)) {
+            lastPerUser[uid] = { d: (u.total_damage?.total)||0, h: (u.total_healing?.total)||0 };
+        }
     }
 
     // Detect server-side clear: empty payload → reset timer and totals
@@ -255,6 +272,7 @@ function processDataUpdate(data) {
         fightStartTs = 0;
         lastCombatTs = 0;
         lastTotals = { dmg: 0, heal: 0 };
+        lastPerUser = {};
     }
 
     updateAll();
