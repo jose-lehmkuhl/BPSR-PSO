@@ -3,30 +3,18 @@ export class StatisticData {
         this.user = user;
         this.type = type || '';
         this.element = element || '';
-        this.stats = {
-            normal: 0,
-            critical: 0,
-            lucky: 0,
-            crit_lucky: 0,
-            hpLessen: 0,
-            total: 0,
-        };
-        this.count = {
-            normal: 0,
-            critical: 0,
-            lucky: 0,
-            total: 0,
-        };
-        this.realtimeWindow = [];
-        this.timeRange = [];
-        this.realtimeStats = {
-            value: 0,
-            max: 0,
-        };
-
-        // Approximate active time (ms) for DPS/HPS like StarResonance: sum of intervals with activity capped per event
+        // StatAcc style
+        this.stats = { normal: 0, critical: 0, lucky: 0, crit_lucky: 0, hpLessen: 0, total: 0 };
+        this.count = { normal: 0, critical: 0, lucky: 0, total: 0 };
+        this.realtimeWindow = []; // last 1s sliding window
+        this.timeRange = []; // first and last timestamps
+        this.realtimeStats = { value: 0, max: 0 };
+        // ActiveSeconds: measured by capped intervals between events (<= 1000ms each)
         this._lastEventTime = 0;
         this._activeMs = 0;
+        // Extremes
+        this.maxSingle = 0;
+        this.minSingle = 0;
     }
 
     /** 添加数据记录
@@ -70,6 +58,11 @@ export class StatisticData {
         }
         this.count.total++;
 
+        if (value > 0) {
+            if (this.maxSingle === 0 || value > this.maxSingle) this.maxSingle = value;
+            if (this.minSingle === 0 || value < this.minSingle) this.minSingle = value;
+        }
+
         this.realtimeWindow.push({
             time: now,
             value,
@@ -100,36 +93,25 @@ export class StatisticData {
     }
 
     getTotalPerSecond() {
-        if (!this.timeRange[0] || !this.timeRange[1]) {
-            return 0;
+        // Prefer ActiveSeconds-based rate (SR style): sum of capped active intervals
+        if (this._activeMs && this._activeMs > 0) {
+            const rate = (this.stats.total / this._activeMs) * 1000;
+            return Number.isFinite(rate) ? rate : 0;
         }
+        if (!this.timeRange[0] || !this.timeRange[1]) return 0;
         const totalPerSecond = (this.stats.total / (this.timeRange[1] - this.timeRange[0])) * 1000 || 0;
-        if (!Number.isFinite(totalPerSecond)) return 0;
-        return totalPerSecond;
+        return Number.isFinite(totalPerSecond) ? totalPerSecond : 0;
     }
 
     reset() {
-        this.stats = {
-            normal: 0,
-            critical: 0,
-            lucky: 0,
-            crit_lucky: 0,
-            hpLessen: 0,
-            total: 0,
-        };
-        this.count = {
-            normal: 0,
-            critical: 0,
-            lucky: 0,
-            total: 0,
-        };
+        this.stats = { normal: 0, critical: 0, lucky: 0, crit_lucky: 0, hpLessen: 0, total: 0 };
+        this.count = { normal: 0, critical: 0, lucky: 0, total: 0 };
         this.realtimeWindow = [];
         this.timeRange = [];
-        this.realtimeStats = {
-            value: 0,
-            max: 0,
-        };
+        this.realtimeStats = { value: 0, max: 0 };
         this._lastEventTime = 0;
         this._activeMs = 0;
+        this.maxSingle = 0;
+        this.minSingle = 0;
     }
 }

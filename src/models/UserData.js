@@ -112,7 +112,6 @@ export class UserData {
             this.skillUsage.set(skillId, new StatisticData(this, '伤害', element));
         }
         this.skillUsage.get(skillId).addRecord(damage, isCrit, isCauseLucky, hpLessenValue);
-        this.skillUsage.get(skillId).realtimeWindow.length = 0;
 
         const subProfession = getSubProfessionBySkillId(skillId);
         if (subProfession) {
@@ -149,7 +148,6 @@ export class UserData {
             this.skillUsage.set(skillId, new StatisticData(this, '治疗', element));
         }
         this.skillUsage.get(skillId).addRecord(healing, isCrit, isCauseLucky);
-        this.skillUsage.get(skillId).realtimeWindow.length = 0;
 
         const subProfession = getSubProfessionBySkillId(skillId - 1000000000);
         if (subProfession) {
