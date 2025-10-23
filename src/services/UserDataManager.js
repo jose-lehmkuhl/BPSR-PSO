@@ -342,26 +342,30 @@ class UserDataManager {
         this.lastLogTime = 0;
     }
 
-    clearAll() {
-        const usersToSave = this.users;
-        const saveStartTime = this.startTime;
-        // Snapshot enemies before clearing
-        const enemiesNameSnapshot = new Map(this.enemyCache.name);
-        const enemiesTakenSnapshot = new Map(this.enemiesTaken);
-        // Snapshot DPS series before clearing
-        const dpsSeriesSnapshot = new Map();
-        for (const [uid, arr] of this.userDpsSeries.entries()) {
-            dpsSeriesSnapshot.set(uid, Array.isArray(arr) ? arr.slice() : []);
+    async clearAll() {
+        // Prevent addLog from writing to the wrong folder during rollover
+        await this.logLock.acquire();
+        let usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot;
+        try {
+            usersToSave = this.users;
+            saveStartTime = this.startTime;
+            enemiesNameSnapshot = new Map(this.enemyCache.name);
+            enemiesTakenSnapshot = new Map(this.enemiesTaken);
+            dpsSeriesSnapshot = new Map();
+            for (const [uid, arr] of this.userDpsSeries.entries()) {
+                dpsSeriesSnapshot.set(uid, Array.isArray(arr) ? arr.slice() : []);
+            }
+            // Switch to a fresh encounter immediately so subsequent logs go to a new folder
+            this.users = new Map();
+            this.startTime = Date.now();
+            this.lastAutoSaveTime = 0;
+            this.lastLogTime = 0;
+            this.refreshEnemyCache();
+            this.userDpsSeries.clear();
+        } finally {
+            this.logLock.release();
         }
-        // Start new encounter state
-        this.users = new Map();
-        this.startTime = Date.now();
-        this.lastAutoSaveTime = 0;
-        this.lastLogTime = 0;
-        // Now clear live caches (after snapshot)
-        this.refreshEnemyCache();
-        this.userDpsSeries.clear();
-        // Persist previous encounter using snapshots
+        // Persist previous encounter outside the lock
         this.saveAllUserData(usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot);
     }
 
