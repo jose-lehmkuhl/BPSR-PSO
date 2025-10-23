@@ -48,11 +48,11 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: 4px 8px;
     background: rgba(18, 21, 23, 0.6); /* header stays more opaque */
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    height: 25px;
-    min-height: 25px;
+    height: 20px;
+    min-height: 20px;
 }
 
 .title-container {
@@ -63,7 +63,7 @@ body {
 }
 
 .app-title {
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 700;
     color: #fff;
     white-space: nowrap;
@@ -81,7 +81,7 @@ body {
 .button-group {
     -webkit-app-region: no-drag;
     display: flex;
-    gap: 8px;
+    gap: 4px;
 }
 
 .button-group button {
@@ -89,9 +89,9 @@ body {
     background: rgba(255, 255, 255, 0.16); /* more opaque */
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: #fff;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
     cursor: pointer;
     transition:
         background-color 0.2s ease,
@@ -157,6 +157,12 @@ body {
     flex-shrink: 0;
     transition: background-color 0.3s ease;
 }
+
+/* Mode dropdown in header */
+.mode-menu { position:absolute; top:22px; right:120px; background:#111; border:1px solid rgba(255,255,255,0.18); border-radius:4px; z-index:9999; }
+.mode-menu.hidden { display:none; }
+.mode-item { padding:6px 10px; font-size:12px; color:#fff; cursor:pointer; white-space:nowrap; }
+.mode-item:hover { background: rgba(255,255,255,0.08); }
 
 #serverStatus.connected {
     background-color: #4caf50;

@@ -45,10 +45,8 @@ function getBaseProfessionName(professionString) {
 }
 
 const columnsContainer = document.getElementById('columnsContainer');
-const modeDpsBtn = document.getElementById('modeDpsBtn');
-const modeHpsBtn = document.getElementById('modeHpsBtn');
-const modeTankingBtn = document.getElementById('modeTankingBtn');
-const modeNpcTankingBtn = document.getElementById('modeNpcTankingBtn');
+const modeMenuButton = document.getElementById('modeMenuButton');
+const modeMenu = document.getElementById('modeMenu');
 let rankingMode = 'dps';
 const settingsContainer = document.getElementById('settingsContainer');
 const helpContainer = document.getElementById('helpContainer');
@@ -569,12 +567,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const ss = String(Math.floor((showMs % 60000) / 1000)).padStart(2, '0');
         if (fightTimerEl) fightTimerEl.textContent = `${mm}:${ss}`;
     }, 500);
-    function setActive(btn){ [modeDpsBtn,modeHpsBtn,modeTankingBtn,modeNpcTankingBtn].forEach(b=> b&&b.classList.remove('active')); btn&&btn.classList.add('active'); }
-    if (modeDpsBtn) modeDpsBtn.addEventListener('click', () => { rankingMode = 'dps'; setActive(modeDpsBtn); updateAll(); });
-    if (modeHpsBtn) modeHpsBtn.addEventListener('click', () => { rankingMode = 'hps'; setActive(modeHpsBtn); updateAll(); });
-    if (modeTankingBtn) modeTankingBtn.addEventListener('click', () => { rankingMode = 'tanking'; setActive(modeTankingBtn); updateAll(); });
-    if (modeNpcTankingBtn) modeNpcTankingBtn.addEventListener('click', () => { rankingMode = 'npc'; setActive(modeNpcTankingBtn); updateAll(); });
-    setActive(modeDpsBtn);
+    if (modeMenuButton && modeMenu) {
+        modeMenuButton.addEventListener('click', (e)=>{
+            e.stopPropagation();
+            modeMenu.classList.toggle('hidden');
+        });
+        modeMenu.querySelectorAll('.mode-item').forEach((el)=>{
+            el.addEventListener('click', (e)=>{
+                rankingMode = el.getAttribute('data-mode');
+                modeMenu.classList.add('hidden');
+                modeMenuButton.textContent = (rankingMode==='dps'?'🗡️': rankingMode==='hps'?'✚': rankingMode==='tanking'?'🛡️':'💀');
+                updateAll();
+            });
+        });
+        document.addEventListener('click', ()=> modeMenu.classList.add('hidden'));
+    }
 
     // Populate/refresh encounter list
     if (encounterSelect) {

@@ -16,28 +16,25 @@
             <div class="main-container">
                 <div class="controls">
                     <div class="title-container">
-                        <div id="serverStatus" class="status-indicator"></div>
+                        <div id="serverStatus" class="status-indicator hidden"></div>
                         <span class="app-title">BPCT</span>
                     </div>
                     <div class="button-group">
-                        <button id="clearButton" onclick="clearData()" title="Clear Data">Clear</button>
-                        <button id="pauseButton" onclick="togglePause()" title="Pause/Resume">Pause</button>
-                        
+                        <button id="modeMenuButton" title="Select View">🗡️</button>
+                        <button id="clearButton" onclick="clearData()" title="Clear">🗑️</button>
+                        <button id="pauseButton" onclick="togglePause()" title="Pause/Resume">⏸️</button>
                         <button id="settingsButton" onclick="toggleSettings()" title="Settings">⚙️</button>
-                        <button id="closeButton" onclick="closeClient()" title="Close Client">X</button>
+                        <button id="closeButton" onclick="closeClient()" title="Close">✕</button>
                         <span id="passthroughTitle" class="passthrough-title hidden"> Clickthrough Enabled </span>
+                        <span id="fightTimer" style="margin-left:6px; color:#fff; font-size:10px; opacity:0.8;">00:00</span>
                     </div>
                 </div>
-                <div class="toolbar" style="padding:6px 8px; display:flex; gap:8px; align-items:center; justify-content: space-between;">
-                    <div style="display:flex; gap:6px; -webkit-app-region: no-drag;">
-                        <button class="mode-btn" id="modeDpsBtn">DPS</button>
-                        <button class="mode-btn" id="modeHpsBtn">HPS</button>
-                        <button class="mode-btn" id="modeTankingBtn">Tanking</button>
-                        <button class="mode-btn" id="modeNpcTankingBtn">NPC</button>
-                    </div>
-                    <div style="color:#fff; font-size:11px; opacity:0.85; min-width:80px; text-align:right;">
-                        <span id="fightTimer">00:00</span>
-                    </div>
+                <!-- Mode dropdown -->
+                <div id="modeMenu" class="mode-menu hidden">
+                    <div class="mode-item" data-mode="dps">🗡️ DPS</div>
+                    <div class="mode-item" data-mode="hps">✚ HPS</div>
+                    <div class="mode-item" data-mode="tanking">🛡️ Tanking</div>
+                    <div class="mode-item" data-mode="npc">💀 NPC</div>
                 </div>
                 <div id="columnsContainer" class="columns-container"></div>
                 <div class="footer-toolbar" style="padding:6px 8px; display:flex; align-items:center; justify-content: space-between; gap:8px;">
