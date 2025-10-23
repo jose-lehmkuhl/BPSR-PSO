@@ -5,6 +5,7 @@ import socket from './Socket.js';
 import logger from './Logger.js';
 import fsPromises from 'fs/promises';
 import path from 'path';
+import monsterNamesEn from '../tables/monster_names_en.json' with { type: 'json' };
 
 class UserDataManager {
     constructor(logger) {
@@ -394,7 +395,10 @@ class UserDataManager {
                 for (const [eid, taken] of this.enemiesTaken.entries()) {
                     if (taken > topVal) { topVal = taken; topId = eid; }
                 }
-                const topName = topId != null ? (this.enemyCache.name.get(topId) || `#${topId}`) : '';
+                let topName = '';
+                if (topId != null) {
+                    topName = this.enemyCache.name.get(topId) || monsterNamesEn[String(topId)] || `#${topId}`;
+                }
                 const mm = String(Math.floor((summary.duration || 0) / 60000)).padStart(2, '0');
                 const ss = String(Math.floor(((summary.duration || 0) % 60000) / 1000)).padStart(2, '0');
                 const meta = {
@@ -403,7 +407,7 @@ class UserDataManager {
                     durationMs: summary.duration,
                     startTime: summary.startTime,
                     endTime: summary.endTime,
-                    label: `${topName || 'Encounter'} [${mm}:${ss}]`,
+                    label: `${topName || 'Encounter'}(${this.enemiesTaken.size}) [${mm}:${ss}]`,
                 };
                 await fsPromises.writeFile(path.join(logDir, 'encounter_meta.json'), JSON.stringify(meta, null, 2), 'utf8');
             } catch {}
