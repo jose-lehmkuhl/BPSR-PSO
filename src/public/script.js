@@ -82,6 +82,9 @@ let lastCombatTs = 0;
 let lastTotals = { dmg: 0, heal: 0 };
 let lastPerUser = {}; // no longer used for resets; kept for potential future use
 let currentEncounter = 'current';
+let historicalUsers = null;
+let historicalEnemies = null;
+const encounterOptions = new Set(['current']);
 
 const SERVER_URL = 'localhost:8990';
 
@@ -197,14 +200,14 @@ function renderNpcTankingList(enemies) {
 
 function updateAll() {
     if (currentEncounter !== 'current') {
-        // Historical view
+        // Historical view: render from cached historical arrays
         if (rankingMode === 'npc') {
-            // load enemies for timestamp if desired (skipped here)
-            columnsContainer.innerHTML = '';
+            const enemiesArray = Array.isArray(historicalEnemies) ? historicalEnemies : [];
+            renderNpcTankingList(enemiesArray);
             return;
         } else {
-            // load users for timestamp
-            columnsContainer.innerHTML = '';
+            const usersArray = Array.isArray(historicalUsers) ? historicalUsers : [];
+            renderDataList(usersArray);
             return;
         }
     }
@@ -360,6 +363,8 @@ function connectWebSocket() {
             allEnemies = data.enemies || {};
         }
         lastWebSocketMessage = Date.now();
+        // Avoid overriding historical view on live updates
+        if (currentEncounter === 'current') updateAll();
     });
 
     socket.on('user_deleted', (data) => {
@@ -492,30 +497,41 @@ document.addEventListener('DOMContentLoaded', () => {
     if (modeNpcTankingBtn) modeNpcTankingBtn.addEventListener('click', () => { rankingMode = 'npc'; setActive(modeNpcTankingBtn); updateAll(); });
     setActive(modeDpsBtn);
 
-    // Populate encounter list
+    // Populate/refresh encounter list
     if (encounterSelect) {
-        // Load existing logs list
-        fetch(`http://${SERVER_URL}/api/history/list`).then(r=>r.json()).then((resp)=>{
-            if (Array.isArray(resp?.data)) {
-                resp.data.sort(); resp.data.reverse();
-                for (const ts of resp.data) {
-                    const opt = document.createElement('option');
-                    opt.value = ts; opt.textContent = ts;
-                    encounterSelect.appendChild(opt);
+        const refreshEncounters = () => {
+            fetch(`http://${SERVER_URL}/api/history/list`).then(r=>r.json()).then((resp)=>{
+                if (Array.isArray(resp?.data)) {
+                    resp.data.sort(); resp.data.reverse();
+                    for (const ts of resp.data) {
+                        if (encounterOptions.has(ts)) continue;
+                        encounterOptions.add(ts);
+                        const opt = document.createElement('option');
+                        opt.value = ts; opt.textContent = ts;
+                        encounterSelect.appendChild(opt);
+                    }
                 }
-            }
-        }).catch(()=>{});
+            }).catch(()=>{});
+        };
+        refreshEncounters();
+        setInterval(refreshEncounters, 5000);
         encounterSelect.addEventListener('change', async (e)=>{
             currentEncounter = e.target.value || 'current';
-            if (currentEncounter === 'current') { updateAll(); return; }
+            if (currentEncounter === 'current') {
+                historicalUsers = null;
+                historicalEnemies = null;
+                updateAll();
+                return;
+            }
             try {
                 const res = await fetch(`http://${SERVER_URL}/api/history/${currentEncounter}/data`);
                 const json = await res.json();
                 if (json?.code === 0 && json.user) {
                     // show historical users
-                    const usersArray = Object.entries(json.user).map(([id, u])=> ({ id, ...u }))
+                    historicalUsers = Object.entries(json.user).map(([id, u])=> ({ id, ...u }))
                         .filter((u)=> (u.total_dps>0 || u.total_hps>0 || (u.taken_damage||0)>0));
-                    renderDataList(usersArray);
+                    // optional: load enemies here similarly if needed
+                    updateAll();
                 }
             } catch {}
         });
