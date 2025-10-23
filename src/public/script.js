@@ -55,6 +55,7 @@ const helpContainer = document.getElementById('helpContainer');
 const fightTimerEl = document.getElementById('fightTimer');
 const oocTimer = document.getElementById('oocTimer');
 const saveOocBtn = document.getElementById('saveOocBtn');
+const themeSelect = document.getElementById('themeSelect');
 const encounterSelect = document.getElementById('encounterSelect');
 const passthroughTitle = document.getElementById('passthroughTitle');
 const pauseButton = document.getElementById('pauseButton');
@@ -456,6 +457,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saveOocBtn && oocTimer) {
         fetch(`http://${SERVER_URL}/api/settings`).then((r) => r.json()).then((resp) => {
             if (resp?.data?.outOfCombatClearSeconds != null) oocTimer.value = resp.data.outOfCombatClearSeconds;
+            if (resp?.data?.theme && themeSelect) {
+                themeSelect.value = resp.data.theme;
+                const appw = document.getElementById('app-wrapper');
+                if (appw) appw.className = `theme-${themeSelect.value}`;
+            }
         }).catch(() => {});
         saveOocBtn.addEventListener('click', async () => {
             const seconds = Math.max(5, Math.min(600, parseInt(oocTimer.value || '15', 10)));
@@ -466,6 +472,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ outOfCombatClearSeconds: seconds })
                 });
                 alert('Saved.');
+            } catch {}
+        });
+    }
+
+    // Theme change handler
+    if (themeSelect) {
+        themeSelect.addEventListener('change', async () => {
+            const value = themeSelect.value;
+            const appw = document.getElementById('app-wrapper');
+            if (appw) appw.className = `theme-${value}`;
+            try {
+                await fetch(`http://${SERVER_URL}/api/settings`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme: value })
+                });
             } catch {}
         });
     }

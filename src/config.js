@@ -6,6 +6,7 @@ class Config {
             autoClearOnServerChange: true,
             autoClearOnTimeout: false,
             outOfCombatClearSeconds: 10,
+            theme: 'default',
         };
     }
 }

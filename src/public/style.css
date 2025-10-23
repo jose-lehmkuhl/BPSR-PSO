@@ -34,6 +34,34 @@ body {
     height: 100%;
     box-sizing: border-box;
     border-radius: 12px;
+.theme-wow #app-wrapper,
+.theme-wow .main-container,
+.theme-wow .data-item,
+.theme-wow .controls,
+.theme-wow .toolbar,
+.theme-wow .footer-toolbar,
+.theme-wow #settingsContainer {
+    border-radius: 2px !important;
+    background: rgba(0,0,0,0.85) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+}
+.theme-wow .button-group button,
+.theme-wow .mode-btn,
+.theme-wow .btn,
+.theme-wow .input,
+.theme-wow select,
+.theme-wow #encounterSelect {
+    border-radius: 2px !important;
+    background: rgba(0,0,0,0.7) !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+}
+.theme-wow .dps-bar-fill,
+.theme-wow .hps-bar-fill,
+.theme-wow .tanking-bar-fill {
+    opacity: 1;
+}
+.theme-wow .content { text-shadow: none; }
+.theme-wow .columns-container { gap: 3px; }
     overflow: hidden;
     background: rgba(48, 51, 53, var(--main-bg-opacity));
     border: 1px solid rgba(255, 255, 255, 0.1);
