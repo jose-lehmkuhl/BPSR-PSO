@@ -84,7 +84,6 @@ let lastPerUser = {}; // no longer used for resets; kept for potential future us
 let currentEncounter = 'current';
 let historicalUsers = null;
 let historicalEnemies = null;
-const encounterOptions = new Set(['current']);
 
 const SERVER_URL = 'localhost:8990';
 
@@ -501,30 +500,45 @@ document.addEventListener('DOMContentLoaded', () => {
     if (encounterSelect) {
         const refreshEncounters = () => {
             fetch(`http://${SERVER_URL}/api/history/list`).then(r=>r.json()).then((resp)=>{
-                if (Array.isArray(resp?.data)) {
-                    // newest first
-                    resp.data.sort((a,b)=> Number(b) - Number(a));
-                    for (const ts of resp.data) {
-                        if (encounterOptions.has(ts)) continue;
-                        encounterOptions.add(ts);
-                        const opt = document.createElement('option');
-                        opt.value = ts; opt.textContent = ts;
-                        // Fetch meta to label as Name(Targets) [mm:ss]
-                        fetch(`http://${SERVER_URL}/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
-                            if (meta?.code === 0 && meta.data) {
-                                if (meta.data.label) {
-                                    opt.textContent = meta.data.label;
-                                } else {
-                                    const name = meta.data.topEnemyName || ts;
-                                    const targets = meta.data.targetCount || 0;
-                                    const dur = meta.data.durationMs || 0;
-                                    const mm = String(Math.floor(dur/60000)).padStart(2,'0');
-                                    const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
-                                    opt.textContent = `${name}(${targets}) [${mm}:${ss}]`;
-                                }
+                if (!Array.isArray(resp?.data)) return;
+                // newest first
+                const list = resp.data.slice().sort((a,b)=> Number(b) - Number(a));
+                const prev = encounterSelect.value;
+                // Remove all except 'current'
+                const toRemove = [];
+                for (const opt of Array.from(encounterSelect.options)) {
+                    if (opt.value !== 'current') toRemove.push(opt);
+                }
+                toRemove.forEach(opt => opt.remove());
+                // Rebuild in order
+                for (const ts of list) {
+                    const opt = document.createElement('option');
+                    opt.value = ts; opt.textContent = ts;
+                    encounterSelect.appendChild(opt);
+                    // Fetch meta to label as Name(Targets) [mm:ss]
+                    fetch(`http://${SERVER_URL}/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
+                        if (meta?.code === 0 && meta.data) {
+                            if (meta.data.label) {
+                                opt.textContent = meta.data.label;
+                            } else {
+                                const name = meta.data.topEnemyName || ts;
+                                const targets = meta.data.targetCount || 0;
+                                const dur = meta.data.durationMs || 0;
+                                const mm = String(Math.floor(dur/60000)).padStart(2,'0');
+                                const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
+                                opt.textContent = `${name}(${targets}) [${mm}:${ss}]`;
                             }
-                        }).catch(()=>{});
-                        encounterSelect.appendChild(opt);
+                        }
+                    }).catch(()=>{});
+                }
+                // Restore selection if possible
+                if (prev && prev !== 'current') {
+                    const exists = list.includes(prev);
+                    encounterSelect.value = exists ? prev : 'current';
+                    // Trigger change to refresh view if changed
+                    if (!exists && currentEncounter !== 'current') {
+                        currentEncounter = 'current';
+                        updateAll();
                     }
                 }
             }).catch(()=>{});
