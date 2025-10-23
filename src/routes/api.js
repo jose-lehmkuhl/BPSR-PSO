@@ -312,6 +312,28 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         }
     });
 
+    // Delete all encounter logs (except current active)
+    router.delete('/history', async (req, res) => {
+        try {
+            const logsRoot = path.join('./logs');
+            const dirents = await fsPromises.readdir(logsRoot, { withFileTypes: true });
+            const active = String(userDataManager.startTime || '');
+            let deleted = 0;
+            for (const d of dirents) {
+                if (!d.isDirectory()) continue;
+                const name = d.name;
+                if (!/^\d+$/.test(name)) continue;
+                if (name === active) continue; // keep current encounter
+                await fsPromises.rm(path.join(logsRoot, name), { recursive: true, force: true });
+                deleted++;
+            }
+            res.json({ code: 0, msg: 'Logs cleared', deleted });
+        } catch (e) {
+            logger.error('Failed to clear logs', e);
+            res.status(500).json({ code: 1, msg: 'Failed to clear logs' });
+        }
+    });
+
     // Get current settings
     router.get('/settings', (req, res) => {
         res.json({ code: 0, data: globalSettings });

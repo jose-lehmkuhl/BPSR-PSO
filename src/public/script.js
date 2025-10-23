@@ -67,6 +67,7 @@ const opacitySlider = document.getElementById('opacitySlider');
 const hkClickthrough = document.getElementById('hkClickthrough');
 const hkToggleWindow = document.getElementById('hkToggleWindow');
 const saveHotkeysBtn = document.getElementById('saveHotkeysBtn');
+const deleteLogsBtn = document.getElementById('deleteLogsBtn');
 const breakdownModal = document.getElementById('breakdownModal');
 const breakdownClose = document.getElementById('breakdownClose');
 const breakdownBody = document.getElementById('breakdownBody');
@@ -105,6 +106,10 @@ function renderDataList(users) {
     const totalDamageOverall = users.reduce((sum, user) => sum + user.total_damage.total, 0);
     const totalHealingOverall = users.reduce((sum, user) => sum + user.total_healing.total, 0);
     const totalTakenOverall = users.reduce((sum, user) => sum + (user.taken_damage || 0), 0);
+    // Top totals for relative-width bars (100% = top player)
+    const topDamage = Math.max(1, ...users.map(u => u.total_damage.total || 0));
+    const topHealing = Math.max(1, ...users.map(u => u.total_healing.total || 0));
+    const topTaken  = Math.max(1, ...users.map(u => (u.taken_damage || 0)));
 
     const mode = rankingMode;
     if (mode === 'hps') {
@@ -126,8 +131,8 @@ function renderDataList(users) {
         const item = document.createElement('li');
 
         item.className = 'data-item';
-        const damagePercent = totalDamageOverall > 0 ? (user.total_damage.total / totalDamageOverall) * 100 : 0;
-        const healingPercent = totalHealingOverall > 0 ? (user.total_healing.total / totalHealingOverall) * 100 : 0;
+        const damagePercent = topDamage > 0 ? (user.total_damage.total / topDamage) * 100 : 0;
+        const healingPercent = topHealing > 0 ? (user.total_healing.total / topHealing) * 100 : 0;
 
         const specMatch = professionString ? professionString.match(/\([^)]*\)/) : null;
         const specSuffix = specMatch ? ` ${specMatch[0]}` : '';
@@ -155,7 +160,7 @@ function renderDataList(users) {
             mainBarFill = `<div class="hps-bar-fill" style="width: ${healingPercent}%; background-color: ${barColor};"></div>`;
         } else if (mode === 'tanking') {
             const tankTotal = user.taken_damage || 0;
-            const tankPercent = totalTakenOverall > 0 ? (tankTotal / totalTakenOverall) * 100 : 0;
+            const tankPercent = topTaken > 0 ? (tankTotal / topTaken) * 100 : 0;
             modeStats = `${formatNumber(tankTotal)} TAKING (${tankPercent.toFixed(1)}%)`;
             mainBarFill = `<div class="tanking-bar-fill" style="width: ${tankPercent}%; background-color: rgba(255,0,0,0.5);"></div>`;
         }
@@ -584,6 +589,23 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('click', ()=> modeMenu.classList.add('hidden'));
     }
 
+    if (deleteLogsBtn) {
+        deleteLogsBtn.addEventListener('click', async ()=>{
+            if (!confirm('Delete all encounter logs (except the current one)?')) return;
+            try {
+                const res = await fetch(`http://${SERVER_URL}/api/history`, { method:'DELETE' });
+                const js = await res.json();
+                if (js.code === 0) {
+                    alert('Logs deleted.');
+                    if (window.refreshEncounters) window.refreshEncounters();
+                } else {
+                    alert('Failed to delete logs');
+                }
+            } catch(e) {
+                alert('Failed to delete logs');
+            }
+        });
+    }
     // Populate/refresh encounter list
     if (encounterSelect) {
         const refreshEncounters = () => {

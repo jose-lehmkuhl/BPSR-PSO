@@ -187,12 +187,12 @@ body {
 
 .columns-container {
     display: flex;
-    gap: 2px;
+    gap: 0px;
     flex-grow: 1;
     overflow-y: auto;
     overflow-x: hidden;
     min-width: 0;
-    padding: 2px;
+    padding: 0px 0px 2px 0px;
     flex-direction: column;
     flex-wrap: nowrap;
 }
@@ -288,6 +288,7 @@ body {
     display: flex;
     flex-direction: column;
     flex-shrink: 0; /* Prevents the item from shrinking below its content size */
+    margin-bottom: 1px;
 }
 
 .main-bar {
