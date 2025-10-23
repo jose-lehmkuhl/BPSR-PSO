@@ -98,6 +98,21 @@ body {
         transform 0.1s ease;
 }
 
+.mode-btn {
+    -webkit-app-region: no-drag;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+.mode-btn:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-1px); }
+.mode-btn:active { transform: translateY(0); }
+.mode-btn.active { background: rgba(76, 175, 80, 0.4); border-color: rgba(76, 175, 80, 0.6); }
+
 .button-group button:hover {
     background: rgba(255, 255, 255, 0.2);
     transform: translateY(-1px);

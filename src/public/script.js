@@ -28,6 +28,7 @@ const columnsContainer = document.getElementById('columnsContainer');
 const modeDpsBtn = document.getElementById('modeDpsBtn');
 const modeHpsBtn = document.getElementById('modeHpsBtn');
 const modeTankingBtn = document.getElementById('modeTankingBtn');
+const modeNpcTankingBtn = document.getElementById('modeNpcTankingBtn');
 let rankingMode = 'dps';
 const settingsContainer = document.getElementById('settingsContainer');
 const helpContainer = document.getElementById('helpContainer');
@@ -45,6 +46,7 @@ const hkToggleWindow = document.getElementById('hkToggleWindow');
 const saveHotkeysBtn = document.getElementById('saveHotkeysBtn');
 
 let allUsers = {};
+let allEnemies = {};
 let userColors = {};
 let isPaused = false;
 let socket = null;
@@ -142,9 +144,39 @@ function renderDataList(users) {
     });
 }
 
+function renderNpcTankingList(enemies) {
+    columnsContainer.innerHTML = '';
+    const totalNpcHpLoss = enemies.reduce((sum, e) => sum + ((e.max_hp || 0) - (e.hp || 0)), 0);
+    enemies.sort((a, b) => (((b.max_hp||0)-(b.hp||0)) - ((a.max_hp||0)-(a.hp||0))));
+    enemies.forEach((e, index) => {
+        const item = document.createElement('li');
+        item.className = 'data-item';
+        const lost = Math.max(0, (e.max_hp || 0) - (e.hp || 0));
+        const percent = totalNpcHpLoss > 0 ? (lost / totalNpcHpLoss) * 100 : 0;
+        const name = e.name || `NPC #${e.id}`;
+        item.innerHTML = `
+            <div class="main-bar">
+                <div class="tanking-bar-fill" style="width: ${percent}%; background-color: rgba(255,0,0,0.5);"></div>
+                <div class="content">
+                    <span class="rank">${index + 1}.</span>
+                    <span class="name">${name}</span>
+                    <span class="stats">${formatNumber(lost)} (${percent.toFixed(1)}%)</span>
+                </div>
+            </div>
+        `;
+        columnsContainer.appendChild(item);
+    });
+}
+
 function updateAll() {
-    const usersArray = Object.values(allUsers).filter((user) => user.total_dps > 0 || user.total_hps > 0);
-    renderDataList(usersArray);
+    if (rankingMode === 'npc') {
+        const enemiesArray = Object.entries(allEnemies).map(([id, e]) => ({ id, ...e }))
+            .filter((e) => (e.hp || 0) >= 0);
+        renderNpcTankingList(enemiesArray);
+    } else {
+        const usersArray = Object.values(allUsers).filter((user) => user.total_dps > 0 || user.total_hps > 0 || (user.taken_damage||0)>0);
+        renderDataList(usersArray);
+    }
 }
 
 function processDataUpdate(data) {
@@ -251,6 +283,9 @@ function connectWebSocket() {
 
     socket.on('data', (data) => {
         processDataUpdate(data);
+        if (data.enemies) {
+            allEnemies = data.enemies || {};
+        }
         lastWebSocketMessage = Date.now();
     });
 
@@ -339,9 +374,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    if (modeDpsBtn) modeDpsBtn.addEventListener('click', () => { rankingMode = 'dps'; updateAll(); });
-    if (modeHpsBtn) modeHpsBtn.addEventListener('click', () => { rankingMode = 'hps'; updateAll(); });
-    if (modeTankingBtn) modeTankingBtn.addEventListener('click', () => { rankingMode = 'tanking'; updateAll(); });
+    function setActive(btn){ [modeDpsBtn,modeHpsBtn,modeTankingBtn,modeNpcTankingBtn].forEach(b=> b&&b.classList.remove('active')); btn&&btn.classList.add('active'); }
+    if (modeDpsBtn) modeDpsBtn.addEventListener('click', () => { rankingMode = 'dps'; setActive(modeDpsBtn); updateAll(); });
+    if (modeHpsBtn) modeHpsBtn.addEventListener('click', () => { rankingMode = 'hps'; setActive(modeHpsBtn); updateAll(); });
+    if (modeTankingBtn) modeTankingBtn.addEventListener('click', () => { rankingMode = 'tanking'; setActive(modeTankingBtn); updateAll(); });
+    if (modeNpcTankingBtn) modeNpcTankingBtn.addEventListener('click', () => { rankingMode = 'npc'; setActive(modeNpcTankingBtn); updateAll(); });
+    setActive(modeDpsBtn);
 
     setBackgroundOpacity(opacitySlider.value);
 
