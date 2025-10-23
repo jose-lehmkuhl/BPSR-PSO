@@ -55,6 +55,7 @@ const helpContainer = document.getElementById('helpContainer');
 const fightTimerEl = document.getElementById('fightTimer');
 const oocTimer = document.getElementById('oocTimer');
 const saveOocBtn = document.getElementById('saveOocBtn');
+const encounterSelect = document.getElementById('encounterSelect');
 const passthroughTitle = document.getElementById('passthroughTitle');
 const pauseButton = document.getElementById('pauseButton');
 const clearButton = document.getElementById('clearButton');
@@ -80,6 +81,7 @@ let fightStartTs = 0;
 let lastCombatTs = 0;
 let lastTotals = { dmg: 0, heal: 0 };
 let lastPerUser = {}; // no longer used for resets; kept for potential future use
+let currentEncounter = 'current';
 
 const SERVER_URL = 'localhost:8990';
 
@@ -194,6 +196,18 @@ function renderNpcTankingList(enemies) {
 }
 
 function updateAll() {
+    if (currentEncounter !== 'current') {
+        // Historical view
+        if (rankingMode === 'npc') {
+            // load enemies for timestamp if desired (skipped here)
+            columnsContainer.innerHTML = '';
+            return;
+        } else {
+            // load users for timestamp
+            columnsContainer.innerHTML = '';
+            return;
+        }
+    }
     if (rankingMode === 'npc') {
         const enemiesArray = Object.entries(allEnemies).map(([id, e]) => ({ id, ...e }))
             .filter((e) => (e.hp || 0) >= 0);
@@ -453,6 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fight timer updater: counts while in combat; after OOC threshold, freezes at (lastCombatTs - fightStartTs)
     setInterval(() => {
+        if (currentEncounter !== 'current') { if (fightTimerEl) fightTimerEl.textContent = '--:--'; return; }
         const now = Date.now();
         const oocSec = parseInt(oocTimer?.value || '15', 10);
         if (!fightStartTs || !lastCombatTs) {
@@ -476,6 +491,35 @@ document.addEventListener('DOMContentLoaded', () => {
     if (modeTankingBtn) modeTankingBtn.addEventListener('click', () => { rankingMode = 'tanking'; setActive(modeTankingBtn); updateAll(); });
     if (modeNpcTankingBtn) modeNpcTankingBtn.addEventListener('click', () => { rankingMode = 'npc'; setActive(modeNpcTankingBtn); updateAll(); });
     setActive(modeDpsBtn);
+
+    // Populate encounter list
+    if (encounterSelect) {
+        // Load existing logs list
+        fetch(`http://${SERVER_URL}/api/history/list`).then(r=>r.json()).then((resp)=>{
+            if (Array.isArray(resp?.data)) {
+                resp.data.sort(); resp.data.reverse();
+                for (const ts of resp.data) {
+                    const opt = document.createElement('option');
+                    opt.value = ts; opt.textContent = ts;
+                    encounterSelect.appendChild(opt);
+                }
+            }
+        }).catch(()=>{});
+        encounterSelect.addEventListener('change', async (e)=>{
+            currentEncounter = e.target.value || 'current';
+            if (currentEncounter === 'current') { updateAll(); return; }
+            try {
+                const res = await fetch(`http://${SERVER_URL}/api/history/${currentEncounter}/data`);
+                const json = await res.json();
+                if (json?.code === 0 && json.user) {
+                    // show historical users
+                    const usersArray = Object.entries(json.user).map(([id, u])=> ({ id, ...u }))
+                        .filter((u)=> (u.total_dps>0 || u.total_hps>0 || (u.taken_damage||0)>0));
+                    renderDataList(usersArray);
+                }
+            } catch {}
+        });
+    }
 
     setBackgroundOpacity(opacitySlider.value);
 
