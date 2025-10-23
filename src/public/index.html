@@ -41,6 +41,20 @@
                         <label for="opacitySlider">Background Opacity</label>
                         <input type="range" id="opacitySlider" min="0" max="1" step="0.05" value="0.05" />
                     </div>
+                    <div class="settings-option">
+                        <label>Hotkeys</label>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <div>
+                                <div style="font-size:12px; color:#ccc;">Click-through</div>
+                                <input id="hkClickthrough" type="text" value="F6" style="width:80px;" />
+                            </div>
+                            <div>
+                                <div style="font-size:12px; color:#ccc;">Toggle Window</div>
+                                <input id="hkToggleWindow" type="text" value="F7" style="width:80px;" />
+                            </div>
+                            <button id="saveHotkeysBtn" style="margin-left:8px;">Save</button>
+                        </div>
+                    </div>
                 </div>
                 <div id="helpContainer" class="help-container hidden">
                     <h2>Keyboard Shortcuts</h2>

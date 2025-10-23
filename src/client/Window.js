@@ -25,6 +25,8 @@ class Window {
         y: undefined,
         passthrough: false,
         lastHeight: 300, // Default restore height for minimize feature
+        clickthroughHotkey: 'F6',
+        toggleWindowHotkey: 'F7',
     };
 
     constructor() {
@@ -63,6 +65,8 @@ class Window {
                 y: bounds.y,
                 passthrough: this.config.passthrough,
                 lastHeight: this.config.lastHeight,
+                clickthroughHotkey: this.config.clickthroughHotkey,
+                toggleWindowHotkey: this.config.toggleWindowHotkey,
             };
             fs.writeFileSync(configPath, JSON.stringify(configData, null, 4));
         } catch (error) {
@@ -177,6 +181,28 @@ class Window {
 
     loadURL(url) {
         this._window.loadURL(url);
+    }
+
+    setHotkeys({ clickthroughHotkey, toggleWindowHotkey }) {
+        if (clickthroughHotkey) this.config.clickthroughHotkey = clickthroughHotkey;
+        if (toggleWindowHotkey) this.config.toggleWindowHotkey = toggleWindowHotkey;
+        this._saveConfig();
+    }
+
+    getHotkeys() {
+        return {
+            clickthroughHotkey: this.config.clickthroughHotkey,
+            toggleWindowHotkey: this.config.toggleWindowHotkey,
+        };
+    }
+
+    toggleVisible() {
+        const win = this.getWindow();
+        if (win.isVisible()) {
+            win.hide();
+        } else {
+            win.showInactive();
+        }
     }
 }
 

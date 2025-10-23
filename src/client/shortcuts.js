@@ -8,7 +8,7 @@ const MOVE_INCREMENT = 20;
  * Registers all global keyboard shortcuts for the application.
  */
 export function registerShortcuts() {
-    registerPassthrough();
+    registerDynamicHotkeys();
     registerResize();
     registerMove();
     registerMinimize();
@@ -17,10 +17,18 @@ export function registerShortcuts() {
 /**
  * Registers the shortcut for toggling mouse event pass-through.
  */
-function registerPassthrough() {
-    globalShortcut.register('Control+`', () => {
-        window.togglePassthrough();
-    });
+function registerDynamicHotkeys() {
+    const { clickthroughHotkey, toggleWindowHotkey } = window.getHotkeys();
+    if (clickthroughHotkey) {
+        globalShortcut.register(clickthroughHotkey, () => {
+            window.togglePassthrough();
+        });
+    }
+    if (toggleWindowHotkey) {
+        globalShortcut.register(toggleWindowHotkey, () => {
+            window.toggleVisible();
+        });
+    }
 }
 
 /**

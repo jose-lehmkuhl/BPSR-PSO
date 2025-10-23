@@ -37,6 +37,9 @@ const closeButton = document.getElementById('closeButton');
 const allButtons = [clearButton, pauseButton, helpButton, settingsButton, closeButton];
 const serverStatus = document.getElementById('serverStatus');
 const opacitySlider = document.getElementById('opacitySlider');
+const hkClickthrough = document.getElementById('hkClickthrough');
+const hkToggleWindow = document.getElementById('hkToggleWindow');
+const saveHotkeysBtn = document.getElementById('saveHotkeysBtn');
 
 let allUsers = {};
 let userColors = {};
@@ -79,7 +82,11 @@ function renderDataList(users) {
         const damagePercent = totalDamageOverall > 0 ? (user.total_damage.total / totalDamageOverall) * 100 : 0;
         const healingPercent = totalHealingOverall > 0 ? (user.total_healing.total / totalHealingOverall) * 100 : 0;
 
-        const displayName = user.fightPoint ? `${user.name} (${user.fightPoint})` : user.name;
+        const specMatch = professionString ? professionString.match(/\([^)]*\)/) : null;
+        const specSuffix = specMatch ? ` ${specMatch[0]}` : '';
+
+        const baseName = `${user.name}${specSuffix}`;
+        const displayName = user.fightPoint ? `${baseName} (${user.fightPoint})` : baseName;
 
         let classIconHtml = '';
         const professionString = user.profession ? user.profession.trim() : '';
@@ -299,6 +306,29 @@ function setBackgroundOpacity(value) {
 
 document.addEventListener('DOMContentLoaded', () => {
     initialize();
+    // Load current hotkeys
+    if (window.electronAPI.getHotkeys) {
+        window.electronAPI.getHotkeys().then((hk) => {
+            if (hkClickthrough && hk?.clickthroughHotkey) hkClickthrough.value = hk.clickthroughHotkey;
+            if (hkToggleWindow && hk?.toggleWindowHotkey) hkToggleWindow.value = hk.toggleWindowHotkey;
+        });
+    }
+
+    if (saveHotkeysBtn) {
+        saveHotkeysBtn.addEventListener('click', async () => {
+            const payload = {
+                clickthroughHotkey: hkClickthrough?.value?.trim() || 'F6',
+                toggleWindowHotkey: hkToggleWindow?.value?.trim() || 'F7',
+            };
+            try {
+                await window.electronAPI.setHotkeys(payload);
+                alert('Hotkeys saved. Restart app to apply.');
+            } catch (e) {
+                console.error('Failed to save hotkeys', e);
+                alert('Failed to save hotkeys');
+            }
+        });
+    }
     if (rankingModeSelect) {
         rankingModeSelect.addEventListener('change', () => updateAll());
     }
