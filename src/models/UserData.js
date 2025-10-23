@@ -1,6 +1,5 @@
 import { StatisticData } from './StatisticData.js';
 import skill_names from '../tables/skill_names.json' with { type: 'json' };
-
 const skillConfig = skill_names.skill_names;
 
 function getSubProfessionBySkillId(skillId) {
@@ -235,7 +234,7 @@ export class UserData {
             const luckyCount = stat.count.lucky;
             const critRate = stat.count.total > 0 ? critCount / stat.count.total : 0;
             const luckyRate = stat.count.total > 0 ? luckyCount / stat.count.total : 0;
-            const name = skillConfig[skillId % 1000000000] ?? skillId % 1000000000;
+            const name = skillConfig[skillId % 1000000000] ?? (skillId % 1000000000);
             const elementype = stat.element;
 
             skills[skillId] = {
