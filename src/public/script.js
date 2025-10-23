@@ -327,29 +327,21 @@ async function clearData() {
         const currentStatus = getServerStatus();
         showServerStatus('cleared');
 
-        // Finalize current encounter (same effect as OOC timeout) and start a new one
-        const response = await fetch(`/api/clear`);
+        // Immediately wipe UI like SR DPS "Reload"
+        allUsers = {}; allEnemies = {}; userColors = {};
+        currentEncounter = 'current'; historicalUsers = null; historicalEnemies = null;
+        fightStartTs = 0; lastCombatTs = 0; lastTotals = { dmg: 0, heal: 0 }; lastPerUser = {};
+        updateAll();
+
+        // Ask server to reset without saving (start a fresh encounter)
+        const response = await fetch(`/api/reset`, { method: 'POST' });
         const result = await response.json();
 
         if (result.code === 0) {
-            allUsers = {};
-            userColors = {};
-            // Reset fight timer state on manual clear
-            fightStartTs = 0;
-            lastCombatTs = 0;
-            lastTotals = { dmg: 0, heal: 0 };
-            lastPerUser = {};
-            // Ensure live view after refresh
-            currentEncounter = 'current';
-            historicalUsers = null;
-            historicalEnemies = null;
-            updateAll();
             showServerStatus('cleared');
-            console.log('Encounter finalized and new started.');
-            // Refresh encounter labels immediately after clear completes
-            if (window.refreshEncounters) window.refreshEncounters();
+            console.log('Encounter reset; counting from zero.');
         } else {
-            console.error('Failed to clear data on server:', result.msg);
+            console.error('Failed to reset encounter on server:', result.msg);
         }
 
         setTimeout(() => showServerStatus(currentStatus), 1000);
