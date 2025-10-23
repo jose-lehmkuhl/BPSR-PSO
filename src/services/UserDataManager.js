@@ -310,13 +310,18 @@ class UserDataManager {
     clearAll() {
         const usersToSave = this.users;
         const saveStartTime = this.startTime;
+        // Snapshot enemies before clearing
+        const enemiesNameSnapshot = new Map(this.enemyCache.name);
+        const enemiesTakenSnapshot = new Map(this.enemiesTaken);
+        // Start new encounter state
         this.users = new Map();
-        // Also reset enemies so NPC tab doesn't keep previous fight data
-        this.refreshEnemyCache();
         this.startTime = Date.now();
         this.lastAutoSaveTime = 0;
         this.lastLogTime = 0;
-        this.saveAllUserData(usersToSave, saveStartTime);
+        // Now clear live caches (after snapshot)
+        this.refreshEnemyCache();
+        // Persist previous encounter using snapshots
+        this.saveAllUserData(usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot);
     }
 
     clearIdentities() {
@@ -343,7 +348,7 @@ class UserDataManager {
         return Array.from(this.users.keys());
     }
 
-    async saveAllUserData(usersToSave = null, startTime = null) {
+    async saveAllUserData(usersToSave = null, startTime = null, enemiesNameSnapshot = null, enemiesTakenSnapshot = null) {
         try {
             const endTime = Date.now();
             const users = usersToSave || this.users;
@@ -384,32 +389,44 @@ class UserDataManager {
                 const userDataPath = path.join(usersDir, `${uid}.json`);
                 await fsPromises.writeFile(userDataPath, JSON.stringify(userData, null, 2), 'utf8');
             }
-            // Persist enemies (uid -> name) for historical meta
-            const enemiesObj = Object.fromEntries(this.enemyCache.name);
+            // Persist enemies (uid -> name) for historical meta (use snapshot if provided)
+            const enemiesMap = enemiesNameSnapshot || this.enemyCache.name;
+            const enemiesObj = Object.fromEntries(enemiesMap);
             await fsPromises.writeFile(path.join(logDir, 'enemies.json'), JSON.stringify(enemiesObj, null, 2), 'utf8');
             await fsPromises.writeFile(path.join(logDir, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8');
             // Write encounter meta (name/duration/targets) to simplify client
             try {
                 let topId = null;
                 let topVal = -1;
-                for (const [eid, taken] of this.enemiesTaken.entries()) {
+                const takenMap = enemiesTakenSnapshot || this.enemiesTaken;
+                for (const [eid, taken] of takenMap.entries()) {
                     if (taken > topVal) { topVal = taken; topId = eid; }
                 }
                 let topName = '';
                 if (topId != null) {
-                    topName = this.enemyCache.name.get(topId) || monsterNamesEn[String(topId)] || `#${topId}`;
+                    const nameMap = enemiesNameSnapshot || this.enemyCache.name;
+                    topName = nameMap.get(topId) || monsterNamesEn[String(topId)] || `#${topId}`;
                 }
                 const mm = String(Math.floor((summary.duration || 0) / 60000)).padStart(2, '0');
                 const ss = String(Math.floor(((summary.duration || 0) % 60000) / 1000)).padStart(2, '0');
                 const meta = {
                     name: topName,
-                    targetCount: this.enemiesTaken.size,
+                    targetCount: (enemiesTakenSnapshot ? enemiesTakenSnapshot.size : this.enemiesTaken.size),
                     durationMs: summary.duration,
                     startTime: summary.startTime,
                     endTime: summary.endTime,
-                    label: `${topName || 'Encounter'}(${this.enemiesTaken.size}) [${mm}:${ss}]`,
+                    label: `${topName || 'Encounter'}(${enemiesTakenSnapshot ? enemiesTakenSnapshot.size : this.enemiesTaken.size}) [${mm}:${ss}]`,
                 };
                 await fsPromises.writeFile(path.join(logDir, 'encounter_meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+
+                // Persist enemies_tanking for historical NPC tab
+                const tankObj = {};
+                const nameMap = enemiesNameSnapshot || this.enemyCache.name;
+                for (const [eid, taken] of takenMap.entries()) {
+                    const nm = nameMap.get(eid) || monsterNamesEn[String(eid)] || `#${eid}`;
+                    tankObj[eid] = { name: nm, taken_total: taken };
+                }
+                await fsPromises.writeFile(path.join(logDir, 'enemies_tanking.json'), JSON.stringify(tankObj, null, 2), 'utf8');
             } catch {}
             logger.debug(`Saved data for ${summary.userCount} users to ${logDir}`);
         } catch (error) {

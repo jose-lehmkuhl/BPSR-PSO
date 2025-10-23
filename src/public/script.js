@@ -542,11 +542,14 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const res = await fetch(`http://${SERVER_URL}/api/history/${currentEncounter}/data`);
                 const json = await res.json();
-                if (json?.code === 0 && json.user) {
-                    // show historical users
-                    historicalUsers = Object.entries(json.user).map(([id, u])=> ({ id, ...u }))
-                        .filter((u)=> (u.total_dps>0 || u.total_hps>0 || (u.taken_damage||0)>0));
-                    // optional: load enemies here similarly if needed
+                if (json?.code === 0) {
+                    if (json.user) {
+                        historicalUsers = Object.entries(json.user).map(([id, u])=> ({ id, ...u }))
+                            .filter((u)=> (u.total_dps>0 || u.total_hps>0 || (u.taken_damage||0)>0));
+                    } else { historicalUsers = []; }
+                    if (json.enemies) {
+                        historicalEnemies = Object.entries(json.enemies).map(([id, e])=> ({ id, ...e }));
+                    } else { historicalEnemies = []; }
                     updateAll();
                 }
             } catch {}

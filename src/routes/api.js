@@ -231,10 +231,13 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         try {
             const data = await fsPromises.readFile(historyFilePath, 'utf8');
             const userData = JSON.parse(data);
-            res.json({
-                code: 0,
-                user: userData,
-            });
+            // Load historical NPC tanking if available
+            let enemiesData = null;
+            try {
+                const e = await fsPromises.readFile(path.join('./logs', timestamp, 'enemies_tanking.json'), 'utf8');
+                enemiesData = JSON.parse(e);
+            } catch {}
+            res.json({ code: 0, user: userData, enemies: enemiesData });
         } catch (error) {
             if (error.code === 'ENOENT') {
                 logger.warn('History data file not found:', error);
