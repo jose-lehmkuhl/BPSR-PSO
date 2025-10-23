@@ -39,13 +39,7 @@ function getSubProfessionBySkillId(skillId) {
             return '(Wildpack)';
         case 1419:
             return '(Skyward)';
-        case 1405:
         case 1418:
-            return '(Vanguard)';
-        // Wind Knight additions: prefer Vanguard over Skyward when both appear
-        case 1417:
-            return '(Vanguard)';
-        case 1420:
             return '(Vanguard)';
         case 2405:
             return '(Shield)';
