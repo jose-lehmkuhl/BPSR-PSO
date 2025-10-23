@@ -45,6 +45,9 @@ class UserDataManager {
         setInterval(() => {
             this.cleanUpInactiveUsers();
         }, 30 * 1000);
+
+        // Per-user DPS time series (recorded once per second)
+        this.userDpsSeries = new Map(); // uid -> [{ x: sec, y: dps }]
     }
 
     // New: Method to remove users who have not been updated in 60 seconds
@@ -250,16 +253,28 @@ class UserDataManager {
     }
 
     updateAllRealtimeDps() {
+        const now = Date.now();
+        const secFromStart = Math.max(0, Math.floor((now - this.startTime) / 1000));
         for (const user of this.users.values()) {
             user.updateRealtimeDps();
+            const uid = user.uid;
+            const dps = user.damageStats?.realtimeStats?.value || 0;
+            if (!this.userDpsSeries.has(uid)) this.userDpsSeries.set(uid, []);
+            const series = this.userDpsSeries.get(uid);
+            const last = series.length ? series[series.length - 1] : null;
+            if (!last || last.x !== secFromStart) {
+                series.push({ x: secFromStart, y: dps });
+                if (series.length > 3 * 3600) series.shift();
+            } else {
+                last.y = dps;
+            }
         }
     }
 
     getUserSkillData(uid) {
         const user = this.users.get(uid);
         if (!user) return null;
-        // Build simple per-second DPS series from realtime window if available
-        const dSeries = (user.damageStats?.realtimeWindow || []).map((e)=> ({ x: Math.floor((e.time - this.startTime)/1000), y: e.value || 0 }));
+        const dSeries = Array.isArray(this.userDpsSeries.get(uid)) ? this.userDpsSeries.get(uid) : [];
         return {
             uid: user.uid,
             name: user.name,
@@ -317,6 +332,11 @@ class UserDataManager {
         // Snapshot enemies before clearing
         const enemiesNameSnapshot = new Map(this.enemyCache.name);
         const enemiesTakenSnapshot = new Map(this.enemiesTaken);
+        // Snapshot DPS series before clearing
+        const dpsSeriesSnapshot = new Map();
+        for (const [uid, arr] of this.userDpsSeries.entries()) {
+            dpsSeriesSnapshot.set(uid, Array.isArray(arr) ? arr.slice() : []);
+        }
         // Start new encounter state
         this.users = new Map();
         this.startTime = Date.now();
@@ -324,8 +344,9 @@ class UserDataManager {
         this.lastLogTime = 0;
         // Now clear live caches (after snapshot)
         this.refreshEnemyCache();
+        this.userDpsSeries.clear();
         // Persist previous encounter using snapshots
-        this.saveAllUserData(usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot);
+        this.saveAllUserData(usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot);
     }
 
     clearIdentities() {
@@ -352,7 +373,7 @@ class UserDataManager {
         return Array.from(this.users.keys());
     }
 
-    async saveAllUserData(usersToSave = null, startTime = null, enemiesNameSnapshot = null, enemiesTakenSnapshot = null) {
+    async saveAllUserData(usersToSave = null, startTime = null, enemiesNameSnapshot = null, enemiesTakenSnapshot = null, dpsSeriesSnapshot = null) {
         try {
             const endTime = Date.now();
             const users = usersToSave || this.users;
@@ -378,7 +399,7 @@ class UserDataManager {
                     total_dps: user.getTotalDps(),
                     skills: user.getSkillSummary(),
                     attr: user.attr,
-                    dps_series: [],
+                    dps_series: Array.isArray((dpsSeriesSnapshot || this.userDpsSeries).get(uid)) ? (dpsSeriesSnapshot || this.userDpsSeries).get(uid) : [],
                 };
                 userDatas.set(uid, userData);
             }
