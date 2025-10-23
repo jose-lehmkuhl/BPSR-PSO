@@ -44,6 +44,7 @@ const opacitySlider = document.getElementById('opacitySlider');
 const hkClickthrough = document.getElementById('hkClickthrough');
 const hkToggleWindow = document.getElementById('hkToggleWindow');
 const saveHotkeysBtn = document.getElementById('saveHotkeysBtn');
+const clearIdentitiesBtn = document.getElementById('clearIdentitiesBtn');
 
 let allUsers = {};
 let allEnemies = {};
@@ -371,6 +372,17 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) {
                 console.error('Failed to save hotkeys', e);
                 alert('Failed to save hotkeys');
+            }
+        });
+    }
+    if (clearIdentitiesBtn) {
+        clearIdentitiesBtn.addEventListener('click', async () => {
+            try {
+                await fetch(`http://${SERVER_URL}/api/clear-identities`, { method: 'POST' });
+                alert('Identities cleared. They will be re-detected as combat continues.');
+            } catch (e) {
+                console.error('Failed to clear identities', e);
+                alert('Failed to clear identities');
             }
         });
     }

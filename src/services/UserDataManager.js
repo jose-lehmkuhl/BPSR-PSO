@@ -317,6 +317,19 @@ class UserDataManager {
         this.saveAllUserData(usersToSave, saveStartTime);
     }
 
+    clearIdentities() {
+        // Reset in-memory users
+        for (const user of this.users.values()) {
+            user.setName('');
+            user.setSubProfession('');
+            user.setProfession('...');
+            if (user.specScores) user.specScores.clear();
+        }
+        // Reset persistent cache
+        this.userCache.clear();
+        this.forceUserCacheSave().catch(() => {});
+    }
+
     addEnemyTaken(targetUid, hpLessenValue, damageValue) {
         const addVal = (hpLessenValue && hpLessenValue > 0) ? hpLessenValue : (damageValue || 0);
         if (addVal <= 0) return;

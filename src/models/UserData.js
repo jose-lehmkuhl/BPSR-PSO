@@ -57,6 +57,21 @@ function getSubProfessionBySkillId(skillId) {
     }
 }
 
+function mapSpecToBaseProfession(subProfession) {
+    if (!subProfession) return '';
+    const spec = subProfession.replace(/[()]/g, '').trim().toLowerCase();
+    // Map spec → base class (must match asset names in public/assets)
+    if (spec === 'smite' || spec === 'lifebind') return 'Verdant Oracle';
+    if (spec === 'vanguard' || spec === 'skyward') return 'Wind Knight';
+    if (spec === 'earthfort' || spec === 'block') return 'Shield Knight';
+    if (spec === 'wildpack' || spec === 'falconry') return 'Marksman';
+    if (spec === 'recovery' || spec === 'shield') return 'Shield Knight';
+    if (spec === 'iaido slash' || spec === 'moonstrike') return 'Stormblade';
+    if (spec === 'frostbeam' || spec === 'icicle') return 'Frost Mage';
+    if (spec === 'dissonance' || spec === 'concerto') return 'Soul Musician';
+    return '';
+}
+
 export class UserData {
     constructor(uid) {
         this.uid = uid;
@@ -173,16 +188,11 @@ export class UserData {
 
     /** 计算总DPS */
     getTotalDps() {
-        // Prefer active time if available, else fall back to total window
-        const activeMs = this.damageStats._activeMs || 0;
-        if (activeMs > 0) return (this.damageStats.stats.total / activeMs) * 1000;
         return this.damageStats.getTotalPerSecond();
     }
 
     /** 计算总HPS */
     getTotalHps() {
-        const activeMs = this.healingStats._activeMs || 0;
-        if (activeMs > 0) return (this.healingStats.stats.total / activeMs) * 1000;
         return this.healingStats.getTotalPerSecond();
     }
 
@@ -264,6 +274,13 @@ export class UserData {
     setSubProfession(subProfession) {
         this._touch();
         this.subProfession = subProfession;
+        // If base class is unknown, infer from spec so icon/name can render
+        if (!this.profession || this.profession === '...') {
+            const base = mapSpecToBaseProfession(subProfession);
+            if (base) {
+                this.profession = base;
+            }
+        }
     }
 
     /** 设置姓名

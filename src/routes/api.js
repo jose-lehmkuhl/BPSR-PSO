@@ -48,6 +48,18 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         });
     });
 
+    // Clear identities (names/classes/specs) and persistent cache
+    router.post('/clear-identities', (req, res) => {
+        try {
+            userDataManager.clearIdentities();
+            logger.info('Identities have been cleared!');
+            res.json({ code: 0, msg: 'Identities have been cleared!' });
+        } catch (e) {
+            logger.error('Failed to clear identities', e);
+            res.status(500).json({ code: 1, msg: 'Failed to clear identities' });
+        }
+    });
+
     // Pause/Resume statistics
     router.post('/pause', (req, res) => {
         const { paused } = req.body;
