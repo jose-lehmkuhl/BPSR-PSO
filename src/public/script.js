@@ -149,22 +149,23 @@ function renderDataList(users) {
 
 function renderNpcTankingList(enemies) {
     columnsContainer.innerHTML = '';
-    const totalNpcHpLoss = enemies.reduce((sum, e) => sum + ((e.max_hp || 0) - (e.hp || 0)), 0);
-    enemies.sort((a, b) => (((b.max_hp||0)-(b.hp||0)) - ((a.max_hp||0)-(a.hp||0))));
+    // Prefer aggregated taken_total; fallback to current HP loss
+    const getTaken = (e) => (e.taken_total != null ? e.taken_total : Math.max(0, (e.max_hp || 0) - (e.hp || 0)));
+    const totalNpcTaken = enemies.reduce((sum, e) => sum + getTaken(e), 0);
+    enemies.sort((a, b) => (getTaken(b) - getTaken(a)));
     enemies.forEach((e, index) => {
         const item = document.createElement('li');
         item.className = 'data-item';
-        const lost = Math.max(0, (e.max_hp || 0) - (e.hp || 0));
-        const percent = totalNpcHpLoss > 0 ? (lost / totalNpcHpLoss) * 100 : 0;
-        const display = `#${e.id}`; // prefer entity id instead of JP name
-        const title = e.name ? ` title="${e.name}"` : '';
+        const taken = getTaken(e);
+        const percent = totalNpcTaken > 0 ? (taken / totalNpcTaken) * 100 : 0;
+        const displayName = e.name || `#${e.id}`;
         item.innerHTML = `
             <div class="main-bar">
                 <div class="tanking-bar-fill" style="width: ${percent}%; background-color: rgba(255,0,0,0.5);"></div>
                 <div class="content">
                     <span class="rank">${index + 1}.</span>
-                    <span class="name"${title}>${display}</span>
-                    <span class="stats">${formatNumber(lost)} (${percent.toFixed(1)}%)</span>
+                    <span class="name">${displayName}</span>
+                    <span class="stats">${formatNumber(taken)} (${percent.toFixed(1)}%)</span>
                 </div>
             </div>
         `;

@@ -5,7 +5,7 @@ class Config {
         this.GLOBAL_SETTINGS = {
             autoClearOnServerChange: true,
             autoClearOnTimeout: false,
-            onlyRecordEliteDummy: false,
+            outOfCombatClearSeconds: 15,
         };
     }
 }
