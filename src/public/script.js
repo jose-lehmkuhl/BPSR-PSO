@@ -270,13 +270,9 @@ function processDataUpdate(data) {
         lastTotals = { dmg: sumDmg, heal: sumHeal };
     }
 
-    // Detect server-side clear: empty payload → reset timer and totals
-    if (Object.keys(data.user).length === 0) {
-        fightStartTs = 0;
-        lastCombatTs = 0;
-        lastTotals = { dmg: 0, heal: 0 };
-        lastPerUser = {};
-    }
+    // Use server-provided timing for accurate fight window
+    if (data.fightStartTime) fightStartTs = data.fightStartTime;
+    if (data.lastActivityTime) lastCombatTs = data.lastActivityTime;
 
     updateAll();
 }

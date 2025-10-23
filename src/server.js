@@ -74,7 +74,13 @@ class Server {
                 userDataManager.updateAllRealtimeDps();
                 const userData = userDataManager.getAllUsersData();
                 const enemiesData = userDataManager.getAllEnemiesData();
-                socket.emit('data', { code: 0, user: userData, enemies: enemiesData });
+                socket.emit('data', {
+                    code: 0,
+                    user: userData,
+                    enemies: enemiesData,
+                    fightStartTime: userDataManager.startTime,
+                    lastActivityTime: userDataManager.lastLogTime,
+                });
             }
         }, 100);
     }
