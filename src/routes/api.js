@@ -127,6 +127,65 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         }
     });
 
+    // Get encounter meta (top enemy name, target count, duration)
+    router.get('/history/:timestamp/meta', async (req, res) => {
+        const { timestamp } = req.params;
+        const logDir = path.join('./logs', timestamp);
+        try {
+            // duration from summary if available
+            let durationMs = null;
+            try {
+                const sumRaw = await fsPromises.readFile(path.join(logDir, 'summary.json'), 'utf8');
+                const summary = JSON.parse(sumRaw);
+                durationMs = summary?.duration ?? null;
+            } catch {}
+
+            // parse fight log for enemy target stats
+            let topEnemyName = '';
+            let targetCount = 0;
+            try {
+                const logRaw = await fsPromises.readFile(path.join(logDir, 'fight.log'), 'utf8');
+                const lines = logRaw.split(/\r?\n/);
+                const idToName = new Map();
+                const idToTaken = new Map();
+                for (const line of lines) {
+                    if (!line.includes('[DMG]')) continue;
+                    const tgtIdx = line.indexOf(' TGT: ');
+                    if (tgtIdx === -1) continue;
+                    const seg = line.slice(tgtIdx + 6);
+                    // format like "SomeName#123(enemy)"
+                    const hashIdx = seg.indexOf('#');
+                    const parIdx = seg.indexOf('(enemy)');
+                    if (hashIdx === -1 || parIdx === -1) continue;
+                    const name = seg.slice(0, hashIdx).trim();
+                    const idStr = seg.slice(hashIdx + 1, parIdx).trim();
+                    const idNum = Number.parseInt(idStr, 10);
+                    if (!Number.isFinite(idNum)) continue;
+                    idToName.set(idNum, name || idToName.get(idNum) || '');
+                    // parse VAL: NNN and HPLSN: MMM
+                    let dmg = 0;
+                    const valMatch = line.match(/\bVAL: (\d+)/);
+                    const hpMatch = line.match(/\bHPLSN: (\d+)/);
+                    if (hpMatch && hpMatch[1]) dmg = Number(hpMatch[1]);
+                    if ((!dmg || dmg === 0) && valMatch && valMatch[1]) dmg = Number(valMatch[1]);
+                    const prev = idToTaken.get(idNum) || 0;
+                    idToTaken.set(idNum, prev + (dmg || 0));
+                }
+                targetCount = idToTaken.size;
+                let topId = null, topVal = -1;
+                for (const [id, val] of idToTaken.entries()) {
+                    if (val > topVal) { topVal = val; topId = id; }
+                }
+                topEnemyName = (topId != null) ? (idToName.get(topId) || `#${topId}`) : '';
+            } catch {}
+
+            res.json({ code: 0, data: { topEnemyName, targetCount, durationMs } });
+        } catch (e) {
+            logger.error('Failed to build encounter meta', e);
+            res.status(500).json({ code: 1, msg: 'Failed to load encounter meta' });
+        }
+    });
+
     // Get history data for a specific timestamp
     router.get('/history/:timestamp/data', async (req, res) => {
         const { timestamp } = req.params;
