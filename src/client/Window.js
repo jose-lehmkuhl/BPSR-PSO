@@ -88,7 +88,7 @@ class Window {
             minHeight: 42,
             transparent: true,
             frame: false,
-            title: 'BPSR-PSO',
+            title: 'Blue Protocol Combat Tracker',
             icon: iconPath,
             webPreferences: {
                 preload: preloadPath,

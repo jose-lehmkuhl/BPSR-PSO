@@ -199,6 +199,20 @@ body {
     font-size: 14px;
 }
 
+/* Unified input/select/button styling to match app */
+.input, select, .btn {
+    -webkit-app-region: no-drag;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+}
+.btn { cursor: pointer; }
+.btn:hover { background: rgba(255,255,255,0.16); }
+.btn:active { transform: translateY(0); }
+
 .hidden {
     display: none !important;
 }

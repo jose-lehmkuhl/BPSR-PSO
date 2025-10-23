@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>BPSR-PSO</title>
+        <title>BPCT</title>
         <link
             href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap"
             rel="stylesheet"
@@ -17,7 +17,7 @@
                 <div class="controls">
                     <div class="title-container">
                         <div id="serverStatus" class="status-indicator"></div>
-                        <span class="app-title">BPSR-PSO</span>
+                        <span class="app-title">BPCT</span>
                     </div>
                     <div class="button-group">
                         <button id="clearButton" onclick="clearData()" title="Clear Data">Clear</button>
@@ -42,7 +42,7 @@
                 <div id="columnsContainer" class="columns-container"></div>
                 <div style="padding:6px 8px; display:flex; align-items:center; justify-content: space-between; gap:8px;">
                     <label for="encounterSelect" style="color:#fff; font-size:12px;">Encounter:</label>
-                    <select id="encounterSelect" style="font-size:12px; padding:2px 6px; flex:1;">
+                    <select id="encounterSelect" class="input" style="flex:1;">
                         <option value="current">Current encounter</option>
                     </select>
                 </div>
@@ -56,19 +56,19 @@
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                             <div>
                                 <div style="font-size:12px; color:#ccc;">Click-through</div>
-                                <input id="hkClickthrough" type="text" value="F6" style="width:80px;" />
+                                <input id="hkClickthrough" type="text" value="F6" class="input" style="width:80px;" />
                             </div>
                             <div>
                                 <div style="font-size:12px; color:#ccc;">Toggle Window</div>
-                                <input id="hkToggleWindow" type="text" value="F7" style="width:80px;" />
+                                <input id="hkToggleWindow" type="text" value="F7" class="input" style="width:80px;" />
                             </div>
-                            <button id="saveHotkeysBtn" style="margin-left:8px;">Save</button>
+                            <button id="saveHotkeysBtn" class="btn" style="margin-left:8px;">Save</button>
                         </div>
                     </div>
                     <div class="settings-option">
                         <label for="oocTimer">Clear data when out of combat (seconds)</label>
-                        <input type="number" id="oocTimer" min="5" max="600" step="5" value="15" />
-                        <button id="saveOocBtn">Save</button>
+                        <input type="number" id="oocTimer" class="input" min="5" max="600" step="5" value="10" />
+                        <button id="saveOocBtn" class="btn">Save</button>
                     </div>
                 </div>
                 
