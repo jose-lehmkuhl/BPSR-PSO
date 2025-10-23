@@ -156,13 +156,14 @@ function renderNpcTankingList(enemies) {
         item.className = 'data-item';
         const lost = Math.max(0, (e.max_hp || 0) - (e.hp || 0));
         const percent = totalNpcHpLoss > 0 ? (lost / totalNpcHpLoss) * 100 : 0;
-        const name = e.name || `NPC #${e.id}`;
+        const display = `#${e.id}`; // prefer entity id instead of JP name
+        const title = e.name ? ` title="${e.name}"` : '';
         item.innerHTML = `
             <div class="main-bar">
                 <div class="tanking-bar-fill" style="width: ${percent}%; background-color: rgba(255,0,0,0.5);"></div>
                 <div class="content">
                     <span class="rank">${index + 1}.</span>
-                    <span class="name">${name}</span>
+                    <span class="name"${title}>${display}</span>
                     <span class="stats">${formatNumber(lost)} (${percent.toFixed(1)}%)</span>
                 </div>
             </div>
