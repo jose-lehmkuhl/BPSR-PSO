@@ -56,12 +56,11 @@ const oocTimer = document.getElementById('oocTimer');
 const saveOocBtn = document.getElementById('saveOocBtn');
 const encounterSelect = document.getElementById('encounterSelect');
 const passthroughTitle = document.getElementById('passthroughTitle');
-const pauseButton = document.getElementById('pauseButton');
 const clearButton = document.getElementById('clearButton');
 const helpButton = document.getElementById('helpButton');
 const settingsButton = document.getElementById('settingsButton');
 const closeButton = document.getElementById('closeButton');
-const allButtons = [clearButton, pauseButton, helpButton, settingsButton, closeButton];
+const allButtons = [clearButton, helpButton, settingsButton, closeButton].filter(Boolean);
 const serverStatus = document.getElementById('serverStatus');
 const opacitySlider = document.getElementById('opacitySlider');
 const hkClickthrough = document.getElementById('hkClickthrough');
@@ -339,6 +338,10 @@ async function clearData() {
             lastCombatTs = 0;
             lastTotals = { dmg: 0, heal: 0 };
             lastPerUser = {};
+            // Ensure live view after refresh
+            currentEncounter = 'current';
+            historicalUsers = null;
+            historicalEnemies = null;
             updateAll();
             showServerStatus('cleared');
             console.log('Data cleared successfully.');
