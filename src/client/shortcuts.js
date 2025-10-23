@@ -11,14 +11,13 @@ export function registerShortcuts() {
     registerDynamicHotkeys();
     registerResize();
     registerMove();
-    registerMinimize();
 }
 
 /**
  * Registers the shortcut for toggling mouse event pass-through.
  */
 function registerDynamicHotkeys() {
-    const { clickthroughHotkey, toggleWindowHotkey } = window.getHotkeys();
+    const { clickthroughHotkey, toggleWindowHotkey, clearHotkey } = window.getHotkeys();
     if (clickthroughHotkey) {
         globalShortcut.register(clickthroughHotkey, () => {
             window.togglePassthrough();
@@ -27,6 +26,13 @@ function registerDynamicHotkeys() {
     if (toggleWindowHotkey) {
         globalShortcut.register(toggleWindowHotkey, () => {
             window.toggleVisible();
+        });
+    }
+    if (clearHotkey) {
+        globalShortcut.register(clearHotkey, () => {
+            // trigger renderer to clear
+            const web = window.getWindow().webContents;
+            web.executeJavaScript('window.clearData && window.clearData();');
         });
     }
 }
@@ -86,8 +92,4 @@ function registerMove() {
 /**
  * Registers the shortcut for minimizing/restoring the window height.
  */
-function registerMinimize() {
-    globalShortcut.register('Control+Alt+Z', () => {
-        window.minimizeOrRestore();
-    });
-}
+// removed minimize shortcut to keep header minimal

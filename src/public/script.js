@@ -66,6 +66,7 @@ const serverStatus = document.getElementById('serverStatus');
 const opacitySlider = document.getElementById('opacitySlider');
 const hkClickthrough = document.getElementById('hkClickthrough');
 const hkToggleWindow = document.getElementById('hkToggleWindow');
+const hkClear = document.getElementById('hkClear');
 const saveHotkeysBtn = document.getElementById('saveHotkeysBtn');
 const deleteLogsBtn = document.getElementById('deleteLogsBtn');
 const breakdownModal = document.getElementById('breakdownModal');
@@ -517,6 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.electronAPI.getHotkeys().then((hk) => {
             if (hkClickthrough && hk?.clickthroughHotkey) hkClickthrough.value = hk.clickthroughHotkey;
             if (hkToggleWindow && hk?.toggleWindowHotkey) hkToggleWindow.value = hk.toggleWindowHotkey;
+            if (hkClear && hk?.clearHotkey) hkClear.value = hk.clearHotkey;
         });
     }
 
@@ -525,6 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = {
                 clickthroughHotkey: hkClickthrough?.value?.trim() || 'F6',
                 toggleWindowHotkey: hkToggleWindow?.value?.trim() || 'F7',
+                clearHotkey: hkClear?.value?.trim() || 'F5',
             };
             try {
                 await window.electronAPI.setHotkeys(payload);

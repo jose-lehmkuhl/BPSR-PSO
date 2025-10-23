@@ -20,8 +20,7 @@
                     </div>
                     <div class="button-group">
                         <button id="modeMenuButton" title="Select View">🗡️</button>
-                        <button id="clearButton" onclick="clearData()" title="Clear">🗑️</button>
-                        <button id="pauseButton" onclick="togglePause()" title="Pause/Resume">⏸️</button>
+                        <button id="clearButton" onclick="clearData()" title="Refresh">🔄</button>
                         <button id="settingsButton" onclick="toggleSettings()" title="Settings">⚙️</button>
                         <button id="closeButton" onclick="closeClient()" title="Close">✕</button>
                         <span id="passthroughTitle" class="passthrough-title hidden"> Clickthrough Enabled </span>
@@ -57,6 +56,10 @@
                             <div>
                                 <div style="font-size:12px; color:#ccc;">Toggle Window</div>
                                 <input id="hkToggleWindow" type="text" value="F7" class="input" style="width:80px;" />
+                            </div>
+                            <div>
+                                <div style="font-size:12px; color:#ccc;">Refresh (Clear)</div>
+                                <input id="hkClear" type="text" value="F5" class="input" style="width:80px;" />
                             </div>
                             <button id="saveHotkeysBtn" class="btn" style="margin-left:8px;">Save</button>
                         </div>

@@ -27,6 +27,7 @@ class Window {
         lastHeight: 300, // Default restore height for minimize feature
         clickthroughHotkey: 'F6',
         toggleWindowHotkey: 'F7',
+        clearHotkey: 'F5',
     };
 
     constructor() {
@@ -183,9 +184,10 @@ class Window {
         this._window.loadURL(url);
     }
 
-    setHotkeys({ clickthroughHotkey, toggleWindowHotkey }) {
+    setHotkeys({ clickthroughHotkey, toggleWindowHotkey, clearHotkey }) {
         if (clickthroughHotkey) this.config.clickthroughHotkey = clickthroughHotkey;
         if (toggleWindowHotkey) this.config.toggleWindowHotkey = toggleWindowHotkey;
+        if (clearHotkey) this.config.clearHotkey = clearHotkey;
         this._saveConfig();
     }
 
@@ -193,6 +195,7 @@ class Window {
         return {
             clickthroughHotkey: this.config.clickthroughHotkey,
             toggleWindowHotkey: this.config.toggleWindowHotkey,
+            clearHotkey: this.config.clearHotkey,
         };
     }
 
