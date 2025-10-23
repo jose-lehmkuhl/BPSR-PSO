@@ -410,22 +410,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Fight timer updater
+    // Fight timer updater: counts while in combat; after OOC threshold, freezes at (lastCombatTs - fightStartTs)
     setInterval(() => {
         const now = Date.now();
-        // Reset detection: compare to server-side clear using inactivity (we also mirror on UI)
         const oocSec = parseInt(oocTimer?.value || '15', 10);
-        if (lastCombatTs && now - lastCombatTs > oocSec * 1000) {
-            fightStartTs = 0;
-            lastCombatTs = 0;
-        }
         if (!fightStartTs || !lastCombatTs) {
             if (fightTimerEl) fightTimerEl.textContent = '00:00';
             return;
         }
-        const elapsed = Math.max(0, now - fightStartTs);
-        const mm = String(Math.floor(elapsed / 60000)).padStart(2, '0');
-        const ss = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, '0');
+        const sinceLast = now - lastCombatTs;
+        let showMs;
+        if (sinceLast < oocSec * 1000) {
+            showMs = Math.max(0, now - fightStartTs);
+        } else {
+            showMs = Math.max(0, lastCombatTs - fightStartTs); // subtract OOC window implicitly
+        }
+        const mm = String(Math.floor(showMs / 60000)).padStart(2, '0');
+        const ss = String(Math.floor((showMs % 60000) / 1000)).padStart(2, '0');
         if (fightTimerEl) fightTimerEl.textContent = `${mm}:${ss}`;
     }, 500);
     function setActive(btn){ [modeDpsBtn,modeHpsBtn,modeTankingBtn,modeNpcTankingBtn].forEach(b=> b&&b.classList.remove('active')); btn&&btn.classList.add('active'); }

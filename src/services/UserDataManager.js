@@ -310,6 +310,8 @@ class UserDataManager {
         const usersToSave = this.users;
         const saveStartTime = this.startTime;
         this.users = new Map();
+        // Also reset enemies so NPC tab doesn't keep previous fight data
+        this.refreshEnemyCache();
         this.startTime = Date.now();
         this.lastAutoSaveTime = 0;
         this.lastLogTime = 0;
