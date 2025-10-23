@@ -32,6 +32,9 @@ const modeNpcTankingBtn = document.getElementById('modeNpcTankingBtn');
 let rankingMode = 'dps';
 const settingsContainer = document.getElementById('settingsContainer');
 const helpContainer = document.getElementById('helpContainer');
+const fightTimerEl = document.getElementById('fightTimer');
+const oocTimer = document.getElementById('oocTimer');
+const saveOocBtn = document.getElementById('saveOocBtn');
 const passthroughTitle = document.getElementById('passthroughTitle');
 const pauseButton = document.getElementById('pauseButton');
 const clearButton = document.getElementById('clearButton');
@@ -53,6 +56,8 @@ let socket = null;
 let isWebSocketConnected = false;
 let lastWebSocketMessage = Date.now();
 const WEBSOCKET_RECONNECT_INTERVAL = 5000;
+let fightStartTs = 0;
+let lastCombatTs = 0;
 
 const SERVER_URL = 'localhost:8990';
 
@@ -225,6 +230,14 @@ function processDataUpdate(data) {
         allUsers[userId] = updatedUser;
     }
 
+    // Combat timing: detect activity and update timestamps
+    const hasAnyActivity = Object.values(allUsers).some((u) => (u.total_damage?.total || 0) > 0 || (u.total_healing?.total || 0) > 0);
+    const nowTs = Date.now();
+    if (hasAnyActivity) {
+        if (!fightStartTs) fightStartTs = nowTs;
+        lastCombatTs = nowTs;
+    }
+
     updateAll();
 }
 
@@ -379,6 +392,42 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    // Load and save OOC timer
+    if (saveOocBtn && oocTimer) {
+        fetch(`http://${SERVER_URL}/api/settings`).then((r) => r.json()).then((resp) => {
+            if (resp?.data?.outOfCombatClearSeconds != null) oocTimer.value = resp.data.outOfCombatClearSeconds;
+        }).catch(() => {});
+        saveOocBtn.addEventListener('click', async () => {
+            const seconds = Math.max(5, Math.min(600, parseInt(oocTimer.value || '15', 10)));
+            try {
+                await fetch(`http://${SERVER_URL}/api/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ outOfCombatClearSeconds: seconds })
+                });
+                alert('Saved.');
+            } catch {}
+        });
+    }
+
+    // Fight timer updater
+    setInterval(() => {
+        const now = Date.now();
+        // Reset detection: compare to server-side clear using inactivity (we also mirror on UI)
+        const oocSec = parseInt(oocTimer?.value || '15', 10);
+        if (lastCombatTs && now - lastCombatTs > oocSec * 1000) {
+            fightStartTs = 0;
+            lastCombatTs = 0;
+        }
+        if (!fightStartTs || !lastCombatTs) {
+            if (fightTimerEl) fightTimerEl.textContent = '00:00';
+            return;
+        }
+        const elapsed = Math.max(0, now - fightStartTs);
+        const mm = String(Math.floor(elapsed / 60000)).padStart(2, '0');
+        const ss = String(Math.floor((elapsed % 60000) / 1000)).padStart(2, '0');
+        if (fightTimerEl) fightTimerEl.textContent = `${mm}:${ss}`;
+    }, 500);
     function setActive(btn){ [modeDpsBtn,modeHpsBtn,modeTankingBtn,modeNpcTankingBtn].forEach(b=> b&&b.classList.remove('active')); btn&&btn.classList.add('active'); }
     if (modeDpsBtn) modeDpsBtn.addEventListener('click', () => { rankingMode = 'dps'; setActive(modeDpsBtn); updateAll(); });
     if (modeHpsBtn) modeHpsBtn.addEventListener('click', () => { rankingMode = 'hps'; setActive(modeHpsBtn); updateAll(); });

@@ -390,11 +390,12 @@ class UserDataManager {
     }
 
     checkTimeoutClear() {
-        if (!config.GLOBAL_SETTINGS.autoClearOnTimeout || this.lastLogTime === 0 || this.users.size === 0) return;
+        const thresholdSec = config.GLOBAL_SETTINGS.outOfCombatClearSeconds || 0;
+        if (!thresholdSec || this.lastLogTime === 0 || this.users.size === 0) return;
         const currentTime = Date.now();
-        if (this.lastLogTime && currentTime - this.lastLogTime > 15000) {
+        if (this.lastLogTime && currentTime - this.lastLogTime > thresholdSec * 1000) {
             this.clearAll();
-            logger.info('Timeout reached, statistics cleared!');
+            logger.info('Out-of-combat timeout reached, statistics cleared!');
         }
     }
 
