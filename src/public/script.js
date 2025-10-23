@@ -333,15 +333,26 @@ async function clearData() {
         fightStartTs = 0; lastCombatTs = 0; lastTotals = { dmg: 0, heal: 0 }; lastPerUser = {};
         updateAll();
 
-        // Ask server to reset without saving (start a fresh encounter)
-        const response = await fetch(`/api/reset`, { method: 'POST' });
-        const result = await response.json();
+        // Ask server to clear on next packet (more robust), fallback to immediate clear
+        let ok = false; let msg = '';
+        try {
+            const r1 = await fetch(`/api/clear-request`, { method: 'POST' });
+            const j1 = await r1.json();
+            ok = j1?.code === 0; msg = j1?.msg || '';
+        } catch (e) { ok = false; }
+        if (!ok) {
+            try {
+                const r2 = await fetch(`/api/clear`);
+                const j2 = await r2.json();
+                ok = j2?.code === 0; msg = j2?.msg || '';
+            } catch (e) { ok = false; }
+        }
 
-        if (result.code === 0) {
+        if (ok) {
             showServerStatus('cleared');
-            console.log('Encounter reset; counting from zero.');
+            console.log('Encounter reset/clear requested; counting from zero.');
         } else {
-            console.error('Failed to reset encounter on server:', result.msg);
+            console.error('Failed to reset/clear encounter on server:', msg);
         }
 
         setTimeout(() => showServerStatus(currentStatus), 1000);

@@ -38,14 +38,27 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         res.json(data);
     });
 
-    // Clear all statistics
-    router.get('/clear', (req, res) => {
-        userDataManager.clearAll();
-        logger.info('Statistics have been cleared!');
-        res.json({
-            code: 0,
-            msg: 'Statistics have been cleared!',
-        });
+    // Clear all statistics (same path used by OOC timeout)
+    router.get('/clear', async (req, res) => {
+        try {
+            await userDataManager.clearAll();
+            logger.info('Statistics have been cleared!');
+            res.json({ code: 0, msg: 'Statistics have been cleared!' });
+        } catch (e) {
+            logger.error('Failed to clear stats', e);
+            res.status(500).json({ code: 1, msg: 'Failed to clear stats' });
+        }
+    });
+
+    // Request clear on next event (SR-like immediate UI reset, server clears on next packet)
+    router.post('/clear-request', (req, res) => {
+        try {
+            userDataManager.requestClear();
+            res.json({ code: 0, msg: 'Clear requested' });
+        } catch (e) {
+            logger.error('Failed to request clear', e);
+            res.status(500).json({ code: 1, msg: 'Failed to request clear' });
+        }
     });
 
     // Reset current encounter without saving (discard current log and start new)

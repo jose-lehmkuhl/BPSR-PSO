@@ -48,6 +48,9 @@ class UserDataManager {
 
         // Per-user DPS time series (recorded once per second)
         this.userDpsSeries = new Map(); // uid -> [{ x: sec, y: dps }]
+
+        // Front-triggered clear flag (handled in checkTimeoutClear on next event)
+        this.forceClearRequested = false;
     }
 
     // New: Method to remove users who have not been updated in 60 seconds
@@ -484,12 +487,23 @@ class UserDataManager {
 
     checkTimeoutClear() {
         const thresholdSec = config.GLOBAL_SETTINGS.outOfCombatClearSeconds || 0;
+        // If front requested a clear, honor it immediately on next event
+        if (this.forceClearRequested) {
+            this.forceClearRequested = false;
+            this.clearAll();
+            logger.info('Front-requested clear executed.');
+            return;
+        }
         if (!thresholdSec || this.lastLogTime === 0 || this.users.size === 0) return;
         const currentTime = Date.now();
         if (this.lastLogTime && currentTime - this.lastLogTime > thresholdSec * 1000) {
             this.clearAll();
             logger.info('Out-of-combat timeout reached, statistics cleared!');
         }
+    }
+
+    requestClear() {
+        this.forceClearRequested = true;
     }
 
     getGlobalSettings() {
