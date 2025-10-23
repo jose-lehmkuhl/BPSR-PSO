@@ -24,6 +24,26 @@ function getNextColorShades() {
     return { dps: dpsColor, hps: hpsColor };
 }
 
+// Fixed color per base class (single color used for both DPS/HPS)
+const classColors = {
+    'Stormblade': 'RoyalBlue',
+    'Frost Mage': 'DeepSkyBlue',
+    'Fire Warrior': 'Tomato',
+    'Wind Knight': 'MediumSeaGreen',
+    'Verdant Oracle': 'YellowGreen',
+    'Marksman': 'Orange',
+    'Heavy Guardian': 'SlateGray',
+    'Reaper': 'MediumPurple',
+    'Gunner': 'Turquoise',
+    'Shield Knight': 'SteelBlue',
+    'Soul Musician': 'HotPink',
+};
+
+function getBaseProfessionName(professionString) {
+    if (!professionString) return '';
+    return professionString.split('(')[0].trim();
+}
+
 const columnsContainer = document.getElementById('columnsContainer');
 const modeDpsBtn = document.getElementById('modeDpsBtn');
 const modeHpsBtn = document.getElementById('modeHpsBtn');
@@ -87,17 +107,19 @@ function renderDataList(users) {
     }
 
     users.forEach((user, index) => {
-        if (!userColors[user.id]) {
-            userColors[user.id] = getNextColorShades();
+        const professionString = user.profession ? user.profession.trim() : '';
+        const baseProf = getBaseProfessionName(professionString);
+        let barColor = classColors[baseProf];
+        if (!barColor) {
+            if (!userColors[user.id]) userColors[user.id] = getNextColorShades();
+            barColor = userColors[user.id].dps;
         }
-        const colors = userColors[user.id];
         const item = document.createElement('li');
 
         item.className = 'data-item';
         const damagePercent = totalDamageOverall > 0 ? (user.total_damage.total / totalDamageOverall) * 100 : 0;
         const healingPercent = totalHealingOverall > 0 ? (user.total_healing.total / totalHealingOverall) * 100 : 0;
 
-        const professionString = user.profession ? user.profession.trim() : '';
         const specMatch = professionString ? professionString.match(/\([^)]*\)/) : null;
         const specSuffix = specMatch ? ` ${specMatch[0]}` : '';
 
@@ -114,23 +136,14 @@ function renderDataList(users) {
             classIconHtml = `<img src="assets/${iconFileName}" class="class-icon" alt="${mainProfession}" onerror="this.style.display='none'">`;
         }
 
+        // Remove embedded HPS sub-bar from DPS tab to keep modes separate
         let subBarHtml = '';
-        if (user.total_healing.total > 0 || user.total_hps > 0) {
-            subBarHtml = `
-                <div class="sub-bar">
-                    <div class="hps-bar-fill" style="width: ${healingPercent}%; background-color: ${colors.hps};"></div>
-                    <div class="hps-stats">
-                       ${formatNumber(user.total_healing.total)} (${formatNumber(user.total_hps)} HPS, ${healingPercent.toFixed(1)}%)
-                    </div>
-                </div>
-            `;
-        }
 
         let modeStats = `${formatNumber(user.total_damage.total)} (${formatNumber(user.total_dps)} DPS, ${damagePercent.toFixed(1)}%)`;
-        let mainBarFill = `<div class="dps-bar-fill" style="width: ${damagePercent}%; background-color: ${colors.dps};"></div>`;
+        let mainBarFill = `<div class="dps-bar-fill" style="width: ${damagePercent}%; background-color: ${barColor};"></div>`;
         if (mode === 'hps') {
             modeStats = `${formatNumber(user.total_healing.total)} (${formatNumber(user.total_hps)} HPS, ${healingPercent.toFixed(1)}%)`;
-            mainBarFill = `<div class="hps-bar-fill" style="width: ${healingPercent}%; background-color: ${colors.hps};"></div>`;
+            mainBarFill = `<div class="hps-bar-fill" style="width: ${healingPercent}%; background-color: ${barColor};"></div>`;
         } else if (mode === 'tanking') {
             const tankTotal = user.taken_damage || 0;
             const tankPercent = totalTakenOverall > 0 ? (tankTotal / totalTakenOverall) * 100 : 0;
