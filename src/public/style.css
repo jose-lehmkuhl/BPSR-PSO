@@ -24,7 +24,7 @@ body {
     pointer-events: none;
     padding: 0px;
     overflow: hidden;
-    border-radius: 12px;
+    border-radius: 4px;
 }
 
 .main-container {
@@ -33,7 +33,7 @@ body {
     flex-direction: column;
     height: 100%;
     box-sizing: border-box;
-    border-radius: 12px;
+    border-radius: 4px;
     overflow: hidden;
     background: rgba(48, 51, 53, var(--main-bg-opacity));
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -90,7 +90,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: #fff;
     padding: 2px 6px;
-    border-radius: 3px;
+    border-radius: 2px;
     font-size: 10px;
     cursor: pointer;
     transition:
@@ -199,7 +199,7 @@ body {
 
 /* Modal */
 .modal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); z-index: 9999; }
-.modal-card { width: 860px; max-width: 94vw; background: #111; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color:#fff; }
+.modal-card { width: 860px; max-width: 94vw; background: #111; border: 1px solid rgba(255,255,255,0.15); border-radius: 3px; color:#fff; }
 .modal-header { display:flex; align-items:center; justify-content: space-between; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.12); }
 .modal-body { max-height: 60vh; overflow:auto; padding: 10px 12px; }
 .modal.hidden { display:none !important; }
@@ -243,7 +243,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.18);
     color: #fff;
     padding: 4px 8px;
-    border-radius: 6px;
+    border-radius: 3px;
     font-size: 12px;
 }
 .btn { cursor: pointer; }
@@ -282,7 +282,7 @@ body {
 .data-item {
     background-color: rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
+    border-radius: 2px;
     overflow: hidden;
     list-style: none; /* Removes the bullet point */
     display: flex;

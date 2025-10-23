@@ -25,18 +25,19 @@ function getNextColorShades() {
 }
 
 // Fixed color per base class (single color used for both DPS/HPS)
+// High-contrast class colors against white text (AA compliant heuristics)
 const classColors = {
-    'Stormblade': 'RoyalBlue',
-    'Frost Mage': 'DeepSkyBlue',
-    'Fire Warrior': 'Tomato',
-    'Wind Knight': 'MediumSeaGreen',
-    'Verdant Oracle': 'YellowGreen',
-    'Marksman': 'Orange',
-    'Heavy Guardian': 'SlateGray',
-    'Reaper': 'MediumPurple',
-    'Gunner': 'Turquoise',
-    'Shield Knight': 'SteelBlue',
-    'Soul Musician': 'HotPink',
+    'Stormblade': '#1E3A8A',      // dark blue
+    'Frost Mage': '#065F46',      // dark teal
+    'Fire Warrior': '#7C2D12',    // dark burnt orange
+    'Wind Knight': '#14532D',     // dark green
+    'Verdant Oracle': '#3F6212',  // dark olive
+    'Marksman': '#7C3E0A',        // dark amber/brown
+    'Heavy Guardian': '#374151',  // slate gray
+    'Reaper': '#4C1D95',          // deep purple
+    'Gunner': '#064E3B',          // deep teal/green
+    'Shield Knight': '#1F2937',   // dark steel
+    'Soul Musician': '#7E22CE',   // purple
 };
 
 function getBaseProfessionName(professionString) {
@@ -120,7 +121,7 @@ function renderDataList(users) {
         let barColor = classColors[baseProf];
         if (!barColor) {
             // Fixed color when class is unknown
-            barColor = 'DimGray';
+            barColor = '#374151';
         }
         const item = document.createElement('li');
 
