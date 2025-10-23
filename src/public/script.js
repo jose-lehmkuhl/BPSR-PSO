@@ -25,6 +25,7 @@ function getNextColorShades() {
 }
 
 const columnsContainer = document.getElementById('columnsContainer');
+const rankingModeSelect = document.getElementById('rankingMode');
 const settingsContainer = document.getElementById('settingsContainer');
 const helpContainer = document.getElementById('helpContainer');
 const passthroughTitle = document.getElementById('passthroughTitle');
@@ -60,7 +61,12 @@ function renderDataList(users) {
     const totalDamageOverall = users.reduce((sum, user) => sum + user.total_damage.total, 0);
     const totalHealingOverall = users.reduce((sum, user) => sum + user.total_healing.total, 0);
 
-    users.sort((a, b) => b.total_dps - a.total_dps);
+    const mode = (rankingModeSelect && rankingModeSelect.value) || 'dps';
+    if (mode === 'hps') {
+        users.sort((a, b) => b.total_hps - a.total_hps);
+    } else {
+        users.sort((a, b) => b.total_dps - a.total_dps);
+    }
 
     users.forEach((user, index) => {
         if (!userColors[user.id]) {
@@ -95,17 +101,25 @@ function renderDataList(users) {
             `;
         }
 
+        const modeStats = mode === 'hps'
+            ? `${formatNumber(user.total_healing.total)} (${formatNumber(user.total_hps)} HPS, ${healingPercent.toFixed(1)}%)`
+            : `${formatNumber(user.total_damage.total)} (${formatNumber(user.total_dps)} DPS, ${damagePercent.toFixed(1)}%)`;
+
+        const mainBarFill = mode === 'hps'
+            ? `<div class="hps-bar-fill" style="width: ${healingPercent}%; background-color: ${colors.hps};"></div>`
+            : `<div class="dps-bar-fill" style="width: ${damagePercent}%; background-color: ${colors.dps};"></div>`;
+
         item.innerHTML = `
             <div class="main-bar">
-                <div class="dps-bar-fill" style="width: ${damagePercent}%; background-color: ${colors.dps};"></div>
+                ${mainBarFill}
                 <div class="content">
                     <span class="rank">${index + 1}.</span>
                     ${classIconHtml}
                     <span class="name">${displayName}</span>
-                    <span class="stats">${formatNumber(user.total_damage.total)} (${formatNumber(user.total_dps)} DPS, ${damagePercent.toFixed(1)}%)</span>
+                    <span class="stats">${modeStats}</span>
                 </div>
             </div>
-            ${subBarHtml}
+            ${mode === 'hps' ? '' : subBarHtml}
         `;
         columnsContainer.appendChild(item);
     });
@@ -285,6 +299,9 @@ function setBackgroundOpacity(value) {
 
 document.addEventListener('DOMContentLoaded', () => {
     initialize();
+    if (rankingModeSelect) {
+        rankingModeSelect.addEventListener('change', () => updateAll());
+    }
 
     setBackgroundOpacity(opacitySlider.value);
 
