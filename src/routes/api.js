@@ -92,10 +92,7 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             });
         }
 
-        res.json({
-            code: 0,
-            data: skillData,
-        });
+        res.json({ code: 0, data: skillData });
     });
 
     // Get history summary for a specific timestamp
@@ -263,10 +260,7 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         try {
             const data = await fsPromises.readFile(historyFilePath, 'utf8');
             const skillData = JSON.parse(data);
-            res.json({
-                code: 0,
-                data: skillData,
-            });
+            res.json({ code: 0, data: skillData });
         } catch (error) {
             if (error.code === 'ENOENT') {
                 logger.warn('History skill file not found:', error);

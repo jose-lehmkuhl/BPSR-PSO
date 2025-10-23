@@ -68,6 +68,10 @@ const opacitySlider = document.getElementById('opacitySlider');
 const hkClickthrough = document.getElementById('hkClickthrough');
 const hkToggleWindow = document.getElementById('hkToggleWindow');
 const saveHotkeysBtn = document.getElementById('saveHotkeysBtn');
+const breakdownModal = document.getElementById('breakdownModal');
+const breakdownClose = document.getElementById('breakdownClose');
+const breakdownBody = document.getElementById('breakdownBody');
+const breakdownTitle = document.getElementById('breakdownTitle');
 
 let allUsers = {};
 let allEnemies = {};
@@ -169,6 +173,11 @@ function renderDataList(users) {
             </div>
             ${mode === 'hps' ? '' : subBarHtml}
         `;
+        // Attach breakdown click for DPS/HPS rows
+        item.querySelector('.main-bar').addEventListener('click', () => {
+            if (rankingMode === 'tanking' || rankingMode === 'npc') return;
+            openBreakdown(user);
+        });
         columnsContainer.appendChild(item);
     });
 }
@@ -410,6 +419,38 @@ function initialize() {
     setInterval(checkConnection, WEBSOCKET_RECONNECT_INTERVAL);
 }
 
+function openBreakdown(user) {
+    if (!user || !breakdownModal) return;
+    // Build skills array from skill summaries on demand via API if historical; else from live snapshot composed server-side
+    const uid = user.id;
+    const isHistorical = currentEncounter !== 'current';
+    const endpoint = isHistorical ? `http://${SERVER_URL}/api/history/${currentEncounter}/skill/${uid}` : `http://${SERVER_URL}/api/skill/${uid}`;
+    fetch(endpoint).then(r=>r.json()).then((resp)=>{
+        if (!(resp?.code === 0 && resp.data)) return;
+        const data = resp.data;
+        const skills = data.skills || {};
+        const skillEntries = Object.entries(skills).map(([sid, s]) => ({ id: sid, name: s.displayName ?? sid, total: s.totalDamage, count: s.totalCount }));
+        const totalSum = skillEntries.reduce((s, e)=> s + (e.total||0), 0) || 1;
+        skillEntries.sort((a,b)=> (b.total||0) - (a.total||0));
+        breakdownTitle.textContent = `${data.name || ('#'+uid)} — ${rankingMode === 'hps' ? 'Healing' : 'Damage'} Breakdown`;
+        breakdownBody.innerHTML = '';
+        for (const entry of skillEntries) {
+            const row = document.createElement('div');
+            row.className = 'skill-row';
+            const pct = ((entry.total||0) / totalSum) * 100;
+            row.innerHTML = `
+                <div class="left">
+                    <span>${entry.name}</span>
+                </div>
+                <div class="skill-bar"><div style="width:${pct.toFixed(2)}%"></div></div>
+                <div>${formatNumber(entry.total||0)} (${pct.toFixed(1)}%)</div>
+            `;
+            breakdownBody.appendChild(row);
+        }
+        breakdownModal.classList.remove('hidden');
+    }).catch(()=>{});
+}
+
 function toggleSettings() {
     const isSettingsVisible = !settingsContainer.classList.contains('hidden');
 
@@ -603,6 +644,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch {}
         });
+    }
+
+    // Breakdown modal close
+    if (breakdownClose && breakdownModal) {
+        breakdownClose.addEventListener('click', ()=> breakdownModal.classList.add('hidden'));
+        breakdownModal.addEventListener('click', (e)=>{ if (e.target === breakdownModal) breakdownModal.classList.add('hidden'); });
     }
 
     setBackgroundOpacity(opacitySlider.value);
