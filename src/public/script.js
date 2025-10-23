@@ -58,6 +58,7 @@ let lastWebSocketMessage = Date.now();
 const WEBSOCKET_RECONNECT_INTERVAL = 5000;
 let fightStartTs = 0;
 let lastCombatTs = 0;
+let lastTotals = { dmg: 0, heal: 0 };
 
 const SERVER_URL = 'localhost:8990';
 
@@ -230,12 +231,22 @@ function processDataUpdate(data) {
         allUsers[userId] = updatedUser;
     }
 
-    // Combat timing: detect activity and update timestamps
-    const hasAnyActivity = Object.values(allUsers).some((u) => (u.total_damage?.total || 0) > 0 || (u.total_healing?.total || 0) > 0);
+    // Combat timing: detect activity only when totals increase (not just > 0)
     const nowTs = Date.now();
-    if (hasAnyActivity) {
+    const sumDmg = Object.values(allUsers).reduce((s,u)=> s + ((u.total_damage?.total)||0), 0);
+    const sumHeal = Object.values(allUsers).reduce((s,u)=> s + ((u.total_healing?.total)||0), 0);
+    const increased = sumDmg > lastTotals.dmg || sumHeal > lastTotals.heal;
+    if (increased) {
         if (!fightStartTs) fightStartTs = nowTs;
         lastCombatTs = nowTs;
+        lastTotals = { dmg: sumDmg, heal: sumHeal };
+    }
+
+    // Detect server-side clear: empty payload → reset timer and totals
+    if (Object.keys(data.user).length === 0) {
+        fightStartTs = 0;
+        lastCombatTs = 0;
+        lastTotals = { dmg: 0, heal: 0 };
     }
 
     updateAll();
