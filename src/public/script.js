@@ -327,8 +327,8 @@ async function clearData() {
         const currentStatus = getServerStatus();
         showServerStatus('cleared');
 
-        // Discard current encounter and start a new one
-        const response = await fetch(`http://${SERVER_URL}/api/reset`, { method: 'POST' });
+        // Finalize current encounter (same effect as OOC timeout) and start a new one
+        const response = await fetch(`http://${SERVER_URL}/api/clear`);
         const result = await response.json();
 
         if (result.code === 0) {
@@ -345,11 +345,11 @@ async function clearData() {
             historicalEnemies = null;
             updateAll();
             showServerStatus('cleared');
-            console.log('Encounter reset successfully.');
+            console.log('Encounter finalized and new started.');
             // Refresh encounter labels immediately after clear completes
             if (window.refreshEncounters) window.refreshEncounters();
         } else {
-            console.error('Failed to reset encounter on server:', result.msg);
+            console.error('Failed to clear data on server:', result.msg);
         }
 
         setTimeout(() => showServerStatus(currentStatus), 1000);
