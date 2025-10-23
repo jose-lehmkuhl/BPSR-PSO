@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onTogglePassthrough: (callback) => ipcRenderer.on('passthrough-toggled', (_event, value) => callback(value)),
     getHotkeys: () => ipcRenderer.invoke('get-hotkeys'),
     setHotkeys: (payload) => ipcRenderer.invoke('set-hotkeys', payload),
+    openBreakdown: (payload) => ipcRenderer.send('open-breakdown', payload),
 });

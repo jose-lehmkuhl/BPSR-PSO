@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Breakdown</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      body { background:#111; margin:0; color:#fff; font-family: 'Roboto Condensed', sans-serif; }
+      .wrap { padding: 10px 12px; }
+      .hdr { display:flex; align-items:center; justify-content: space-between; margin-bottom:8px; }
+      .title { font-size: 16px; font-weight: 700; }
+      .sub { color:#ccc; font-size:12px; }
+      .bd-table { width:100%; border-collapse: collapse; font-size:12px; }
+      .bd-table thead th { position: sticky; top: 0; background: #151515; color:#ddd; text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.15); }
+      .bd-table tbody td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+      .bd-table tbody tr:hover { background: rgba(255,255,255,0.04); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="hdr">
+        <div class="title" id="tTitle">Breakdown</div>
+        <div class="sub" id="tMeta"></div>
+      </div>
+      <table class="bd-table" id="tTable"><thead>
+        <tr><th>Skill</th><th style="text-align:right">Total</th><th style="text-align:right">DPS</th><th style="text-align:right">Hits</th><th style="text-align:right">Crit%</th><th style="text-align:right">Avg/Hit</th><th style="text-align:right">%</th></tr>
+      </thead><tbody id="tBody"></tbody></table>
+    </div>
+    <script>
+      const { ipcRenderer } = require('electron');
+      const SERVER_URL = 'localhost:8990';
+      function fmt(n){ if(n>=1e6)return (n/1e6).toFixed(1)+'M'; if(n>=1e3)return (n/1e3).toFixed(1)+'K'; return Math.round(n).toString(); }
+      ipcRenderer.on('breakdown-load', async (_ev, { uid, timestamp }) => {
+        try{
+          const isHist = !!timestamp && timestamp !== 'current';
+          const base = isHist ? `http://${SERVER_URL}/api/history/${timestamp}` : `http://${SERVER_URL}/api`;
+          const res = await fetch(`${base}/skill/${uid}`);
+          const js = await res.json();
+          if(!(js && js.code===0 && js.data)) return;
+          const d = js.data;
+          const name = d.name || ('#'+uid);
+          const prof = d.profession || '';
+          document.getElementById('tTitle').textContent = `${name}${prof?(' — '+prof):''}`;
+          const skills = d.skills || {};
+          const total = Object.values(skills).reduce((s,v)=> s + (v.totalDamage||0), 0) || 1;
+          document.getElementById('tMeta').textContent = `${fmt(total)} total`;
+          const rows = Object.entries(skills).map(([sid, s])=>{
+            const sum = s.totalDamage||0; const cnt = s.totalCount||0; const avg = cnt? sum/cnt:0; const cr = s.critRate!=null? s.critRate : (cnt? (s.critCount||0)/cnt:0); return {name: s.displayName||sid, sum, cnt, avg, cr, pct: (sum/total)*100};
+          }).sort((a,b)=> b.sum-a.sum);
+          const tb = document.getElementById('tBody'); tb.innerHTML='';
+          // Estimate active seconds from dps if available; otherwise omit DPS
+          let activeSeconds = null;
+          if(d.total_dps && total){ activeSeconds = total / d.total_dps; }
+          for(const r of rows){
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${r.name}</td><td style="text-align:right">${fmt(r.sum)}</td><td style="text-align:right">${activeSeconds? fmt(r.sum/activeSeconds): '-'}</td><td style="text-align:right">${r.cnt}</td><td style="text-align:right">${(r.cr*100).toFixed(1)}%</td><td style="text-align:right">${fmt(r.avg)}</td><td style="text-align:right">${r.pct.toFixed(1)}%</td>`;
+            tb.appendChild(tr);
+          }
+        }catch{}
+      });
+    </script>
+  </body>
+ </html>
+
+

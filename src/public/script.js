@@ -176,7 +176,12 @@ function renderDataList(users) {
         // Attach breakdown click for DPS/HPS rows (anywhere on the item)
         item.addEventListener('click', () => {
             if (rankingMode === 'tanking' || rankingMode === 'npc') return;
-            openBreakdown(user);
+            const payload = { uid: user.id, timestamp: currentEncounter };
+            if (window?.electronAPI?.openBreakdown) {
+                window.electronAPI.openBreakdown(payload);
+            } else {
+                openBreakdown(user);
+            }
         });
         columnsContainer.appendChild(item);
     });
