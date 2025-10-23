@@ -504,15 +504,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!Array.isArray(resp?.data)) return;
                 // newest first
                 const list = resp.data.slice().sort((a,b)=> Number(b) - Number(a));
-                const prev = encounterSelect.value;
-                // Remove all except 'current'
-                const toRemove = [];
-                for (const opt of Array.from(encounterSelect.options)) {
-                    if (opt.value !== 'current') toRemove.push(opt);
-                }
-                toRemove.forEach(opt => opt.remove());
-                // Rebuild in order
+                // Build a set of current option values
+                const existing = new Set(Array.from(encounterSelect.options).map(o=>o.value));
+                const insertAfter = encounterSelect.querySelector('option[value="current"]');
+                let insertRef = insertAfter ? insertAfter.nextSibling : encounterSelect.firstChild;
                 for (const ts of list) {
+                    if (existing.has(ts)) continue; // don't disturb current selection
                     // Fetch meta to label as Name(Targets) [mm:ss]
                     fetch(`http://${SERVER_URL}/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
                         if (!(meta?.code === 0 && meta.data)) return;
@@ -527,23 +524,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
                             labelText = `${name || 'Encounter'}(${targets}) [${mm}:${ss}]`;
                         }
-                        // Filter out empty/placeholder encounters
                         const head = labelText.split('(')[0].trim();
-                        if (!head || head === 'Encounter') return;
+                        if (!head || head === 'Encounter') return; // filter placeholder
                         const opt = document.createElement('option');
                         opt.value = ts; opt.textContent = labelText;
-                        encounterSelect.appendChild(opt);
+                        if (insertRef) {
+                            encounterSelect.insertBefore(opt, insertRef);
+                        } else {
+                            encounterSelect.appendChild(opt);
+                        }
                     }).catch(()=>{});
-                }
-                // Restore selection if possible
-                if (prev && prev !== 'current') {
-                    const exists = list.includes(prev);
-                    encounterSelect.value = exists ? prev : 'current';
-                    // Trigger change to refresh view if changed
-                    if (!exists && currentEncounter !== 'current') {
-                        currentEncounter = 'current';
-                        updateAll();
-                    }
                 }
             }).catch(()=>{});
         };
