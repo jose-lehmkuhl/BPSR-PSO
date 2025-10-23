@@ -237,8 +237,16 @@ function processDataUpdate(data) {
     const sumHeal = Object.values(allUsers).reduce((s,u)=> s + ((u.total_healing?.total)||0), 0);
     const increased = sumDmg > lastTotals.dmg || sumHeal > lastTotals.heal;
     if (increased) {
-        if (!fightStartTs) fightStartTs = nowTs;
+        const oocSec = parseInt(oocTimer?.value || '15', 10);
+        if (fightStartTs && lastCombatTs && (nowTs - lastCombatTs) >= oocSec * 1000) {
+            // New fight starting after OOC window: reset timer baseline
+            fightStartTs = nowTs;
+            lastTotals = { dmg: sumDmg, heal: sumHeal };
+        } else if (!fightStartTs) {
+            fightStartTs = nowTs;
+        }
         lastCombatTs = nowTs;
+        // Update baseline after processing
         lastTotals = { dmg: sumDmg, heal: sumHeal };
     }
 
