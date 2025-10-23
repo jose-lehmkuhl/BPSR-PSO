@@ -49,7 +49,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    background: rgba(18, 21, 23, 0.3);
+    background: rgba(18, 21, 23, 0.6); /* header stays more opaque */
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     height: 25px;
     min-height: 25px;
@@ -86,7 +86,7 @@ body {
 
 .button-group button {
     -webkit-app-region: no-drag;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.16); /* more opaque */
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: #fff;
     padding: 4px 10px;
@@ -100,7 +100,7 @@ body {
 
 .mode-btn {
     -webkit-app-region: no-drag;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.16); /* more opaque */
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: #fff;
     padding: 4px 10px;
@@ -108,6 +108,13 @@ body {
     font-size: 11px;
     cursor: pointer;
     transition: background-color 0.2s ease, transform 0.1s ease;
+}
+.toolbar, .footer-toolbar, #settingsContainer {
+    background: rgba(18, 21, 23, 0.6); /* keep UI chrome opaque */
+}
+
+.footer-toolbar select {
+    background: rgba(255,255,255,0.16);
 }
 .mode-btn:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-1px); }
 .mode-btn:active { transform: translateY(0); }
@@ -268,7 +275,7 @@ body {
     left: 0;
     height: 100%;
     z-index: 1;
-    opacity: 0.6;
+    opacity: 1; /* make bars fully opaque regardless of global bg opacity */
     transition: width 0.3s ease;
 }
 

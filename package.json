@@ -1,6 +1,6 @@
 {
     "name": "bpsr_pso",
-    "productName": "Blue Protocol Damage Meter",
+    "productName": "Blue Protocol Combat Tracker",
     "version": "1.0.0",
     "description": "Blue Protocol: Star Resonance - Per Second Overlay",
     "main": "src/index.js",
@@ -16,7 +16,7 @@
     "config": {
         "forge": {
             "packagerConfig": {
-                "name": "BPSR PSO",
+                "name": "Blue Protocol Combat Tracker",
                 "icon": "./resources/app.ico",
                 "extraResources": [
                     "./resources/npcap-1.83.exe",
