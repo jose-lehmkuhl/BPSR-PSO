@@ -2,6 +2,8 @@ import zlib from 'zlib';
 import Long from 'long';
 import pbjs from 'protobufjs/minimal.js';
 import fs from 'fs';
+import path from 'path';
+import monsterNamesEnLocal from '../tables/monster_names_en.json' with { type: 'json' };
 import logger from './Logger.js';
 import { createRequire } from 'module';
 import monsterNames from '../tables/monster_names.json' with { type: 'json' };
@@ -10,6 +12,9 @@ import userDataManager from './UserDataManager.js';
 
 const require = createRequire(import.meta.url);
 const pb = require('../algo/blueprotobuf.js');
+
+// Try to load English monster names from sdps2 repo if available
+let monsterNamesEn = monsterNamesEnLocal || null;
 
 const MessageType = {
     None: 0,
@@ -595,7 +600,12 @@ export class PacketProcessor {
                 }
                 case AttrType.AttrId: {
                     const attrId = reader.int32();
-                    const name = monsterNames[attrId];
+                    let name = null;
+                    if (monsterNamesEn && monsterNamesEn[String(attrId)]) {
+                        name = monsterNamesEn[String(attrId)];
+                    } else {
+                        name = monsterNames[attrId];
+                    }
                     if (name) {
                         logger.info(`Found monster name ${name} for id ${enemyUid}`);
                         userDataManager.enemyCache.name.set(enemyUid, name);
