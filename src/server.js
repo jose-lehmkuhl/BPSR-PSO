@@ -48,6 +48,9 @@ class Server {
                 this._configureProcessEvents();
                 this._configureSocketEmitter();
                 this._configureSocketListener();
+                // Cleanup logs without enemies on startup and periodically
+                await this._cleanupEmptyLogs();
+                setInterval(() => { this._cleanupEmptyLogs().catch(()=>{}); }, 5 * 60 * 1000);
                 await this._startPacketInterceptor();
             } catch (error) {
                 console.error('Error during server startup:', error);
@@ -92,6 +95,59 @@ class Server {
                 logger.info(`WebSocket client disconnected: ${sock.id}`);
             });
         });
+    }
+
+    async _cleanupEmptyLogs() {
+        try {
+            const logsRoot = path.join(__dirname, 'logs');
+            const dirents = await fsPromises.readdir(logsRoot, { withFileTypes: true });
+            const active = String(userDataManager.startTime || '');
+            const nonEmptyCandidates = [];
+            for (const d of dirents) {
+                if (!d.isDirectory()) continue;
+                const name = d.name;
+                if (!/^\d+$/.test(name)) continue;
+                if (name === active) continue; // skip current encounter
+                const logDir = path.join(logsRoot, name);
+                const enemiesPath = path.join(logDir, 'enemies.json');
+                let empty = false;
+                try {
+                    const raw = await fsPromises.readFile(enemiesPath, 'utf8');
+                    const obj = JSON.parse(raw || '{}');
+                    if (!obj || Object.keys(obj).length === 0) empty = true;
+                } catch (e) {
+                    // missing or unreadable enemies.json → treat as empty
+                    empty = true;
+                }
+                if (empty) {
+                    try {
+                        await fsPromises.rm(logDir, { recursive: true, force: true });
+                        logger.info(`Pruned empty encounter log: ${name}`);
+                    } catch (e) {
+                        logger.warn(`Failed pruning log ${name}: ${e?.message || e}`);
+                    }
+                } else {
+                    nonEmptyCandidates.push(name);
+                }
+            }
+
+            // Keep only the newest 50 non-empty logs
+            if (nonEmptyCandidates.length > 50) {
+                nonEmptyCandidates.sort((a, b) => Number(a) - Number(b)); // oldest first
+                const toDelete = nonEmptyCandidates.slice(0, nonEmptyCandidates.length - 50);
+                for (const name of toDelete) {
+                    const logDir = path.join(logsRoot, name);
+                    try {
+                        await fsPromises.rm(logDir, { recursive: true, force: true });
+                        logger.info(`Pruned old encounter log: ${name}`);
+                    } catch (e) {
+                        logger.warn(`Failed pruning old log ${name}: ${e?.message || e}`);
+                    }
+                }
+            }
+        } catch (e) {
+            // no-op if logs dir missing
+        }
     }
 
     async _startPacketInterceptor() {
