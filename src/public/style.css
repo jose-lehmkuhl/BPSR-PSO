@@ -232,7 +232,8 @@ body {
 }
 
 .dps-bar-fill,
-.hps-bar-fill {
+.hps-bar-fill,
+.tanking-bar-fill {
     position: absolute;
     top: 0;
     left: 0;

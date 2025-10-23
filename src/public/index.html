@@ -25,17 +25,17 @@
                         <button id="helpButton" onclick="toggleHelp()" title="Help">❓</button>
                         <button id="settingsButton" onclick="toggleSettings()" title="Settings">⚙️</button>
                         <button id="closeButton" onclick="closeClient()" title="Close Client">X</button>
-                        <span id="passthroughTitle" class="passthrough-title hidden"> Passthrough Enabled </span>
+                        <span id="passthroughTitle" class="passthrough-title hidden"> Clickthrough Enabled </span>
+                    </div>
+                </div>
+                <div style="padding:6px 8px; display:flex; gap:8px; align-items:center;">
+                    <div style="display:flex; gap:6px; -webkit-app-region: no-drag;">
+                        <button id="modeDpsBtn">DPS</button>
+                        <button id="modeHpsBtn">HPS</button>
+                        <button id="modeTankingBtn">Tanking</button>
                     </div>
                 </div>
                 <div id="columnsContainer" class="columns-container"></div>
-                <div style="padding:6px 8px; display:flex; gap:8px; align-items:center;">
-                    <label style="font-size:12px; color:#fff;">Ranking:</label>
-                    <select id="rankingMode" style="font-size:12px; padding:2px 6px;">
-                        <option value="dps">DPS</option>
-                        <option value="hps">HPS</option>
-                    </select>
-                </div>
                 <div id="settingsContainer" class="settings-container hidden">
                     <div class="settings-option">
                         <label for="opacitySlider">Background Opacity</label>

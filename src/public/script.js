@@ -25,7 +25,10 @@ function getNextColorShades() {
 }
 
 const columnsContainer = document.getElementById('columnsContainer');
-const rankingModeSelect = document.getElementById('rankingMode');
+const modeDpsBtn = document.getElementById('modeDpsBtn');
+const modeHpsBtn = document.getElementById('modeHpsBtn');
+const modeTankingBtn = document.getElementById('modeTankingBtn');
+let rankingMode = 'dps';
 const settingsContainer = document.getElementById('settingsContainer');
 const helpContainer = document.getElementById('helpContainer');
 const passthroughTitle = document.getElementById('passthroughTitle');
@@ -63,10 +66,13 @@ function renderDataList(users) {
 
     const totalDamageOverall = users.reduce((sum, user) => sum + user.total_damage.total, 0);
     const totalHealingOverall = users.reduce((sum, user) => sum + user.total_healing.total, 0);
+    const totalTakenOverall = users.reduce((sum, user) => sum + (user.taken_damage || 0), 0);
 
-    const mode = (rankingModeSelect && rankingModeSelect.value) || 'dps';
+    const mode = rankingMode;
     if (mode === 'hps') {
         users.sort((a, b) => b.total_hps - a.total_hps);
+    } else if (mode === 'tanking') {
+        users.sort((a, b) => (b.taken_damage || 0) - (a.taken_damage || 0));
     } else {
         users.sort((a, b) => b.total_dps - a.total_dps);
     }
@@ -82,6 +88,7 @@ function renderDataList(users) {
         const damagePercent = totalDamageOverall > 0 ? (user.total_damage.total / totalDamageOverall) * 100 : 0;
         const healingPercent = totalHealingOverall > 0 ? (user.total_healing.total / totalHealingOverall) * 100 : 0;
 
+        const professionString = user.profession ? user.profession.trim() : '';
         const specMatch = professionString ? professionString.match(/\([^)]*\)/) : null;
         const specSuffix = specMatch ? ` ${specMatch[0]}` : '';
 
@@ -89,7 +96,6 @@ function renderDataList(users) {
         const displayName = user.fightPoint ? `${baseName} (${user.fightPoint})` : baseName;
 
         let classIconHtml = '';
-        const professionString = user.profession ? user.profession.trim() : '';
         if (professionString) {
             const mainProfession = professionString.split('(')[0].trim();
             const iconFileName = mainProfession.toLowerCase().replace(/ /g, '_') + '.png';
@@ -108,13 +114,17 @@ function renderDataList(users) {
             `;
         }
 
-        const modeStats = mode === 'hps'
-            ? `${formatNumber(user.total_healing.total)} (${formatNumber(user.total_hps)} HPS, ${healingPercent.toFixed(1)}%)`
-            : `${formatNumber(user.total_damage.total)} (${formatNumber(user.total_dps)} DPS, ${damagePercent.toFixed(1)}%)`;
-
-        const mainBarFill = mode === 'hps'
-            ? `<div class="hps-bar-fill" style="width: ${healingPercent}%; background-color: ${colors.hps};"></div>`
-            : `<div class="dps-bar-fill" style="width: ${damagePercent}%; background-color: ${colors.dps};"></div>`;
+        let modeStats = `${formatNumber(user.total_damage.total)} (${formatNumber(user.total_dps)} DPS, ${damagePercent.toFixed(1)}%)`;
+        let mainBarFill = `<div class="dps-bar-fill" style="width: ${damagePercent}%; background-color: ${colors.dps};"></div>`;
+        if (mode === 'hps') {
+            modeStats = `${formatNumber(user.total_healing.total)} (${formatNumber(user.total_hps)} HPS, ${healingPercent.toFixed(1)}%)`;
+            mainBarFill = `<div class="hps-bar-fill" style="width: ${healingPercent}%; background-color: ${colors.hps};"></div>`;
+        } else if (mode === 'tanking') {
+            const tankTotal = user.taken_damage || 0;
+            const tankPercent = totalTakenOverall > 0 ? (tankTotal / totalTakenOverall) * 100 : 0;
+            modeStats = `${formatNumber(tankTotal)} TAKING (${tankPercent.toFixed(1)}%)`;
+            mainBarFill = `<div class="tanking-bar-fill" style="width: ${tankPercent}%; background-color: rgba(255,0,0,0.5);"></div>`;
+        }
 
         item.innerHTML = `
             <div class="main-bar">
@@ -329,9 +339,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    if (rankingModeSelect) {
-        rankingModeSelect.addEventListener('change', () => updateAll());
-    }
+    if (modeDpsBtn) modeDpsBtn.addEventListener('click', () => { rankingMode = 'dps'; updateAll(); });
+    if (modeHpsBtn) modeHpsBtn.addEventListener('click', () => { rankingMode = 'hps'; updateAll(); });
+    if (modeTankingBtn) modeTankingBtn.addEventListener('click', () => { rankingMode = 'tanking'; updateAll(); });
 
     setBackgroundOpacity(opacitySlider.value);
 
@@ -346,6 +356,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.classList.add('hidden');
             });
             passthroughTitle.classList.remove('hidden');
+            // Update hotkey hint dynamically
+            if (window.electronAPI.getHotkeys) {
+                window.electronAPI.getHotkeys().then((hk) => {
+                    const key = hk?.clickthroughHotkey || 'F6';
+                    passthroughTitle.textContent = ` Clickthrough Enabled (${key}) `;
+                });
+            } else {
+                passthroughTitle.textContent = ' Clickthrough Enabled (F6) ';
+            }
             columnsContainer.classList.remove('hidden');
             settingsContainer.classList.add('hidden');
             helpContainer.classList.add('hidden');
