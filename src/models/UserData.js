@@ -30,6 +30,7 @@ function getSubProfessionBySkillId(skillId) {
             return '(Moonstrike)';
         case 220112:
         case 2203622:
+        case 220106:
             return '(Falconry)';
         case 2292:
         case 1700820:
@@ -37,10 +38,10 @@ function getSubProfessionBySkillId(skillId) {
         case 1700827:
             return '(Wildpack)';
         case 1419:
-            return '(Vanguard)';
+            return '(Skyward)';
         case 1405:
         case 1418:
-            return '(Skyward)';
+            return '(Vanguard)';
         // Wind Knight additions: prefer Vanguard over Skyward when both appear
         case 1417:
             return '(Vanguard)';
@@ -178,11 +179,16 @@ export class UserData {
 
     /** 计算总DPS */
     getTotalDps() {
+        // Prefer active time if available, else fall back to total window
+        const activeMs = this.damageStats._activeMs || 0;
+        if (activeMs > 0) return (this.damageStats.stats.total / activeMs) * 1000;
         return this.damageStats.getTotalPerSecond();
     }
 
     /** 计算总HPS */
     getTotalHps() {
+        const activeMs = this.healingStats._activeMs || 0;
+        if (activeMs > 0) return (this.healingStats.stats.total / activeMs) * 1000;
         return this.healingStats.getTotalPerSecond();
     }
 

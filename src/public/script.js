@@ -98,7 +98,7 @@ function renderDataList(users) {
         const displayName = user.fightPoint ? `${baseName} (${user.fightPoint})` : baseName;
 
         let classIconHtml = '';
-        if (professionString) {
+        if (professionString && professionString !== '...') {
             const mainProfession = professionString.split('(')[0].trim();
             const iconFileName = mainProfession.toLowerCase().replace(/ /g, '_') + '.png';
             classIconHtml = `<img src="assets/${iconFileName}" class="class-icon" alt="${mainProfession}" onerror="this.style.display='none'">`;

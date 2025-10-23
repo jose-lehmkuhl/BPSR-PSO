@@ -23,6 +23,10 @@ export class StatisticData {
             value: 0,
             max: 0,
         };
+
+        // Approximate active time (ms) for DPS/HPS like StarResonance: sum of intervals with activity capped per event
+        this._lastEventTime = 0;
+        this._activeMs = 0;
     }
 
     /** 添加数据记录
@@ -33,6 +37,13 @@ export class StatisticData {
      */
     addRecord(value, isCrit, isLucky, hpLessenValue = 0) {
         const now = Date.now();
+
+        // Update active time: add capped delta since last event (max 1000ms per event)
+        if (this._lastEventTime > 0) {
+            const delta = now - this._lastEventTime;
+            this._activeMs += Math.min(delta, 1000);
+        }
+        this._lastEventTime = now;
 
         if (isCrit) {
             if (isLucky) {
@@ -118,5 +129,7 @@ export class StatisticData {
             value: 0,
             max: 0,
         };
+        this._lastEventTime = 0;
+        this._activeMs = 0;
     }
 }
