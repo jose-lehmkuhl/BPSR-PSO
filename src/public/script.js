@@ -79,7 +79,7 @@ const WEBSOCKET_RECONNECT_INTERVAL = 5000;
 let fightStartTs = 0;
 let lastCombatTs = 0;
 let lastTotals = { dmg: 0, heal: 0 };
-let lastPerUser = {};
+let lastPerUser = {}; // no longer used for resets; kept for potential future use
 
 const SERVER_URL = 'localhost:8990';
 
@@ -111,8 +111,8 @@ function renderDataList(users) {
         const baseProf = getBaseProfessionName(professionString);
         let barColor = classColors[baseProf];
         if (!barColor) {
-            if (!userColors[user.id]) userColors[user.id] = getNextColorShades();
-            barColor = userColors[user.id].dps;
+            // Fixed color when class is unknown
+            barColor = 'DimGray';
         }
         const item = document.createElement('li');
 
@@ -249,37 +249,25 @@ function processDataUpdate(data) {
     const nowTs = Date.now();
     const sumDmg = Object.values(allUsers).reduce((s,u)=> s + ((u.total_damage?.total)||0), 0);
     const sumHeal = Object.values(allUsers).reduce((s,u)=> s + ((u.total_healing?.total)||0), 0);
-    let anyDecrease = false;
-    for (const [uid, u] of Object.entries(allUsers)) {
-        const prev = lastPerUser[uid] || { d: 0, h: 0 };
-        const d = (u.total_damage?.total)||0;
-        const h = (u.total_healing?.total)||0;
-        if (d < prev.d || h < prev.h) { anyDecrease = true; break; }
-    }
+    // Per-user decrease heuristic removed to avoid false positives mid-combat
     // Combat timing: detect activity only when totals increase (not just > 0)
     const increased = sumDmg > lastTotals.dmg || sumHeal > lastTotals.heal;
     if (increased) {
         const oocSec = parseInt(oocTimer?.value || '15', 10);
-        const newFightDetected = anyDecrease || (fightStartTs && lastCombatTs && (nowTs - lastCombatTs) >= oocSec * 1000);
+        const newFightDetected = fightStartTs && lastCombatTs && (nowTs - lastCombatTs) >= oocSec * 1000;
         if (newFightDetected) {
-            // Force server clear at the start of the next fight, then reset local baselines and skip this frame
-            fetch(`http://${SERVER_URL}/api/clear`).catch(() => {});
+            // Start fresh locally (no server clear): clear bars/colors and reset timer
             allUsers = {};
             userColors = {};
-            fightStartTs = 0;
-            lastCombatTs = 0;
-            lastTotals = { dmg: 0, heal: 0 };
-            lastPerUser = {};
-            return; // wait for next update to start fresh
-        } else if (!fightStartTs) {
             fightStartTs = nowTs;
+            lastCombatTs = nowTs;
+            lastTotals = { dmg: sumDmg, heal: sumHeal };
+            updateAll();
+            return;
         }
+        if (!fightStartTs) fightStartTs = nowTs;
         lastCombatTs = nowTs;
-        // Update baseline after processing
         lastTotals = { dmg: sumDmg, heal: sumHeal };
-        for (const [uid, u] of Object.entries(allUsers)) {
-            lastPerUser[uid] = { d: (u.total_damage?.total)||0, h: (u.total_healing?.total)||0 };
-        }
     }
 
     // Detect server-side clear: empty payload → reset timer and totals
