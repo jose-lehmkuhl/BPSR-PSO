@@ -91,7 +91,7 @@ let historicalUsers = null;
 let historicalEnemies = null;
 let lastKnownFightStart = 0;
 
-const SERVER_URL = 'localhost:8990';
+const SERVER_URL = window.location.host;
 
 function formatNumber(num) {
     if (isNaN(num)) return 'NaN';
@@ -328,7 +328,7 @@ async function clearData() {
         showServerStatus('cleared');
 
         // Finalize current encounter (same effect as OOC timeout) and start a new one
-        const response = await fetch(`http://${SERVER_URL}/api/clear`);
+        const response = await fetch(`/api/clear`);
         const result = await response.json();
 
         if (result.code === 0) {
@@ -379,7 +379,7 @@ function getServerStatus() {
 }
 
 function connectWebSocket() {
-    socket = io(`ws://${SERVER_URL}`);
+    socket = io();
 
     socket.on('connect', () => {
         isWebSocketConnected = true;
@@ -544,13 +544,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // Load and save OOC timer
     if (saveOocBtn && oocTimer) {
-        fetch(`http://${SERVER_URL}/api/settings`).then((r) => r.json()).then((resp) => {
+        fetch(`/api/settings`).then((r) => r.json()).then((resp) => {
             if (resp?.data?.outOfCombatClearSeconds != null) oocTimer.value = resp.data.outOfCombatClearSeconds;
         }).catch(() => {});
         saveOocBtn.addEventListener('click', async () => {
             const seconds = Math.max(5, Math.min(600, parseInt(oocTimer.value || '15', 10)));
             try {
-                await fetch(`http://${SERVER_URL}/api/settings`, {
+                await fetch(`/api/settings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ outOfCombatClearSeconds: seconds })
@@ -600,7 +600,7 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteLogsBtn.addEventListener('click', async ()=>{
             if (!confirm('Delete all encounter logs (except the current one)?')) return;
             try {
-                const res = await fetch(`http://${SERVER_URL}/api/history`, { method:'DELETE' });
+            const res = await fetch(`/api/history`, { method:'DELETE' });
                 const js = await res.json();
                 if (js.code === 0) {
                     alert('Logs deleted.');
@@ -616,7 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Populate/refresh encounter list
     if (encounterSelect) {
         const refreshEncounters = () => {
-            fetch(`http://${SERVER_URL}/api/history/list`).then(r=>r.json()).then((resp)=>{
+            fetch(`/api/history/list`).then(r=>r.json()).then((resp)=>{
                 if (!Array.isArray(resp?.data)) return;
                 // newest first
                 const list = resp.data.slice().sort((a,b)=> Number(b) - Number(a));
@@ -627,7 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (const ts of list) {
                     if (existing.has(ts)) continue; // don't disturb current selection
                     // Fetch meta to label as Name(Targets) [mm:ss]
-                    fetch(`http://${SERVER_URL}/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
+                    fetch(`/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
                         if (!(meta?.code === 0 && meta.data)) return;
                         let labelText = '';
                         if (meta.data.label) {
@@ -655,7 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (const opt of Array.from(encounterSelect.options)) {
                     const ts = opt.value;
                     if (!ts || ts === 'current') continue;
-                    fetch(`http://${SERVER_URL}/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
+                    fetch(`/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
                         if (!(meta?.code === 0 && meta.data)) return;
                         let labelText = meta.data.label;
                         if (!labelText) {
@@ -681,7 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const nextEncounter = e.target.value || 'current';
             // If leaving current to view a historical encounter, end the current encounter immediately
             if (wasOnCurrentEncounter && nextEncounter !== 'current') {
-                fetch(`http://${SERVER_URL}/api/clear`).catch(()=>{});
+                fetch(`/api/clear`).catch(()=>{});
             }
             currentEncounter = nextEncounter;
             if (currentEncounter === 'current') {
@@ -692,7 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             try {
-                const res = await fetch(`http://${SERVER_URL}/api/history/${currentEncounter}/data`);
+                const res = await fetch(`/api/history/${currentEncounter}/data`);
                 const json = await res.json();
                 if (json?.code === 0) {
                     if (json.user) {
