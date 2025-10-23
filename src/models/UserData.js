@@ -18,12 +18,14 @@ function getSubProfessionBySkillId(skillId) {
             return '(Smite)';
         case 2306:
             return '(Dissonance)';
+        case 1242:
         case 120901:
         case 120902:
             return '(Icicle)';
         case 1714:
         case 1734:
             return '(Iaido Slash)';
+        case 171:
         case 44701:
         case 179906:
             return '(Moonstrike)';
@@ -41,10 +43,12 @@ function getSubProfessionBySkillId(skillId) {
         case 1418:
             return '(Vanguard)';
         case 2405:
-            return '(Shield)';
-        case 2406:
             return '(Recovery)';
+        case 2406:
+            return '(Shield)';
         case 199902:
+        case   1922:
+        case  1932:
             return '(Earthfort)';
         case 1930:
         case 1931:
