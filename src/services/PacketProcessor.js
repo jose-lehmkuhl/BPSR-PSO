@@ -256,7 +256,7 @@ export class PacketProcessor {
             const value = syncDamageInfo.Value;
             const luckyValue = syncDamageInfo.LuckyValue;
             const damage = value ?? luckyValue ?? Long.ZERO;
-            if (damage.isZero()) {
+            if (damage.isZero() && (!hpLessenValue || hpLessenValue.isZero())) {
                 continue;
             }
 
@@ -301,7 +301,7 @@ export class PacketProcessor {
                         targetUuid.toNumber()
                     );
                     // Track NPC tanking based on hpLessenValue when available (fallback to damage)
-                    userDataManager.addEnemyTaken(targetUid = targetUuid.toNumber(), hpLessenValue.toNumber(), damage.toNumber());
+                    userDataManager.addEnemyTaken(targetUuid.toNumber(), hpLessenValue.toNumber(), damage.toNumber());
                 }
                 if (isDead) {
                     userDataManager.deleteEnemyData(targetUuid.toNumber());
