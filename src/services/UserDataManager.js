@@ -383,7 +383,27 @@ class UserDataManager {
                 const userDataPath = path.join(usersDir, `${uid}.json`);
                 await fsPromises.writeFile(userDataPath, JSON.stringify(userData, null, 2), 'utf8');
             }
+            // Persist enemies (uid -> name) for historical meta
+            const enemiesObj = Object.fromEntries(this.enemyCache.name);
+            await fsPromises.writeFile(path.join(logDir, 'enemies.json'), JSON.stringify(enemiesObj, null, 2), 'utf8');
             await fsPromises.writeFile(path.join(logDir, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8');
+            // Write encounter meta (name/duration/targets) to simplify client
+            try {
+                let topId = null;
+                let topVal = -1;
+                for (const [eid, taken] of this.enemiesTaken.entries()) {
+                    if (taken > topVal) { topVal = taken; topId = eid; }
+                }
+                const topName = topId != null ? (this.enemyCache.name.get(topId) || `#${topId}`) : '';
+                const meta = {
+                    name: topName,
+                    targetCount: this.enemiesTaken.size,
+                    durationMs: summary.duration,
+                    startTime: summary.startTime,
+                    endTime: summary.endTime,
+                };
+                await fsPromises.writeFile(path.join(logDir, 'encounter_meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+            } catch {}
             logger.debug(`Saved data for ${summary.userCount} users to ${logDir}`);
         } catch (error) {
             logger.error('Failed to save all user data:', error);

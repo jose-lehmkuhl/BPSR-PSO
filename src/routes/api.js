@@ -132,6 +132,20 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         const { timestamp } = req.params;
         const logDir = path.join('./logs', timestamp);
         try {
+            // Prefer precomputed meta from end-of-combat save
+            try {
+                const metaRaw = await fsPromises.readFile(path.join(logDir, 'encounter_meta.json'), 'utf8');
+                const meta = JSON.parse(metaRaw);
+                return res.json({
+                    code: 0,
+                    data: {
+                        topEnemyName: meta.name || '',
+                        targetCount: meta.targetCount || 0,
+                        durationMs: meta.durationMs || 0,
+                    },
+                });
+            } catch {}
+
             // duration from summary if available
             let durationMs = null;
             try {
@@ -148,7 +162,23 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 const lines = logRaw.split(/\r?\n/);
                 const idToName = new Map();
                 const idToTaken = new Map();
+                let firstTs = null, lastTs = null;
+                // Load persisted enemy names
+                try {
+                    const enemiesJson = await fsPromises.readFile(path.join(logDir, 'enemies.json'), 'utf8');
+                    const persisted = JSON.parse(enemiesJson);
+                    for (const [k, v] of Object.entries(persisted)) idToName.set(Number(k), v);
+                } catch {}
                 for (const line of lines) {
+                    // timestamps fallback for duration
+                    const tsMatch = line.match(/^\[(.*?)\]/);
+                    if (tsMatch && tsMatch[1]) {
+                        const t = Date.parse(tsMatch[1]);
+                        if (!Number.isNaN(t)) {
+                            if (firstTs == null) firstTs = t;
+                            lastTs = t;
+                        }
+                    }
                     if (!line.includes('[DMG]')) continue;
                     const tgtIdx = line.indexOf(' TGT: ');
                     if (tgtIdx === -1) continue;
@@ -176,7 +206,13 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 for (const [id, val] of idToTaken.entries()) {
                     if (val > topVal) { topVal = val; topId = id; }
                 }
-                topEnemyName = (topId != null) ? (idToName.get(topId) || `#${topId}`) : '';
+                if (topId != null) {
+                    topEnemyName = idToName.get(topId) || `#${topId}`;
+                }
+                // duration fallback if summary missing
+                if ((durationMs == null || durationMs === 0) && firstTs != null && lastTs != null) {
+                    durationMs = Math.max(0, lastTs - firstTs);
+                }
             } catch {}
 
             res.json({ code: 0, data: { topEnemyName, targetCount, durationMs } });
