@@ -326,6 +326,22 @@ class UserDataManager {
         this.enemiesTaken.clear();
     }
 
+    // Discard current encounter logs and reset state without saving
+    async resetWithoutSave() {
+        try {
+            const logDir = path.join('./logs', String(this.startTime));
+            try {
+                await fsPromises.rm(logDir, { recursive: true, force: true });
+            } catch (_) {}
+        } catch (_) {}
+        this.users = new Map();
+        this.refreshEnemyCache();
+        if (this.userDpsSeries && this.userDpsSeries.clear) this.userDpsSeries.clear();
+        this.startTime = Date.now();
+        this.lastAutoSaveTime = 0;
+        this.lastLogTime = 0;
+    }
+
     clearAll() {
         const usersToSave = this.users;
         const saveStartTime = this.startTime;

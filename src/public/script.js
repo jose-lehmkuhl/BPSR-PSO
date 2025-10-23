@@ -327,7 +327,8 @@ async function clearData() {
         const currentStatus = getServerStatus();
         showServerStatus('cleared');
 
-        const response = await fetch(`http://${SERVER_URL}/api/clear`);
+        // Discard current encounter and start a new one
+        const response = await fetch(`http://${SERVER_URL}/api/reset`, { method: 'POST' });
         const result = await response.json();
 
         if (result.code === 0) {
@@ -344,11 +345,11 @@ async function clearData() {
             historicalEnemies = null;
             updateAll();
             showServerStatus('cleared');
-            console.log('Data cleared successfully.');
+            console.log('Encounter reset successfully.');
             // Refresh encounter labels immediately after clear completes
             if (window.refreshEncounters) window.refreshEncounters();
         } else {
-            console.error('Failed to clear data on server:', result.msg);
+            console.error('Failed to reset encounter on server:', result.msg);
         }
 
         setTimeout(() => showServerStatus(currentStatus), 1000);

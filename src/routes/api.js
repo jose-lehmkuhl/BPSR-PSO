@@ -48,6 +48,18 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         });
     });
 
+    // Reset current encounter without saving (discard current log and start new)
+    router.post('/reset', async (req, res) => {
+        try {
+            await userDataManager.resetWithoutSave();
+            logger.info('Current encounter discarded and reset.');
+            res.json({ code: 0, msg: 'Encounter reset' });
+        } catch (e) {
+            logger.error('Failed to reset encounter', e);
+            res.status(500).json({ code: 1, msg: 'Failed to reset encounter' });
+        }
+    });
+
     // Clear identities (names/classes/specs) and persistent cache
     router.post('/clear-identities', (req, res) => {
         try {
