@@ -85,6 +85,7 @@ let currentEncounter = 'current';
 let wasOnCurrentEncounter = true;
 let historicalUsers = null;
 let historicalEnemies = null;
+let lastKnownFightStart = 0;
 
 const SERVER_URL = 'localhost:8990';
 
@@ -288,7 +289,16 @@ function processDataUpdate(data) {
     }
 
     // Use server-provided timing for accurate fight window
-    if (data.fightStartTime) fightStartTs = data.fightStartTime;
+    if (data.fightStartTime) {
+        if (fightStartTs !== data.fightStartTime) {
+            lastKnownFightStart = fightStartTs || 0;
+            fightStartTs = data.fightStartTime;
+            // On new fight (server-side clear), refresh encounter labels shortly
+            if (currentEncounter === 'current') {
+                setTimeout(() => { if (window.refreshEncounters) window.refreshEncounters(); }, 700);
+            }
+        }
+    }
     if (data.lastActivityTime) lastCombatTs = data.lastActivityTime;
 
     updateAll();
@@ -313,6 +323,8 @@ async function clearData() {
             updateAll();
             showServerStatus('cleared');
             console.log('Data cleared successfully.');
+            // Refresh encounter labels immediately after clear completes
+            if (window.refreshEncounters) window.refreshEncounters();
         } else {
             console.error('Failed to clear data on server:', result.msg);
         }
@@ -535,10 +547,32 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }).catch(()=>{});
                 }
+                // Update labels for existing options (including the most recent one that just finalized)
+                for (const opt of Array.from(encounterSelect.options)) {
+                    const ts = opt.value;
+                    if (!ts || ts === 'current') continue;
+                    fetch(`http://${SERVER_URL}/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
+                        if (!(meta?.code === 0 && meta.data)) return;
+                        let labelText = meta.data.label;
+                        if (!labelText) {
+                            const name = meta.data.topEnemyName || '';
+                            const targets = meta.data.targetCount || 0;
+                            const dur = meta.data.durationMs || 0;
+                            const mm = String(Math.floor(dur/60000)).padStart(2,'0');
+                            const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
+                            labelText = `${name || 'Encounter'}(${targets}) [${mm}:${ss}]`;
+                        }
+                        const head = (labelText || '').split('(')[0].trim();
+                        if (!head || head === 'Encounter') return; // don't replace with placeholder
+                        if (opt.textContent !== labelText) opt.textContent = labelText;
+                    }).catch(()=>{});
+                }
             }).catch(()=>{});
         };
         refreshEncounters();
         setInterval(refreshEncounters, 5000);
+        // expose to other functions
+        window.refreshEncounters = refreshEncounters;
         encounterSelect.addEventListener('change', async (e)=>{
             const nextEncounter = e.target.value || 'current';
             // If leaving current to view a historical encounter, end the current encounter immediately
