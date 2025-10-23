@@ -94,8 +94,11 @@ function renderDataList(users) {
         const specMatch = professionString ? professionString.match(/\([^)]*\)/) : null;
         const specSuffix = specMatch ? ` ${specMatch[0]}` : '';
 
-        const baseName = `${user.name}${specSuffix}`;
-        const displayName = user.fightPoint ? `${baseName} (${user.fightPoint})` : baseName;
+        const safeName = (user.name && user.name !== '...') ? user.name : `#${user.id}`;
+        const baseName = `${safeName}${specSuffix}`;
+        const displayName = (typeof user.fightPoint === 'number' && user.fightPoint > 0)
+            ? `${baseName} (${user.fightPoint})`
+            : baseName;
 
         let classIconHtml = '';
         if (professionString && professionString !== '...') {

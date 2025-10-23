@@ -409,10 +409,12 @@ export class PacketProcessor {
                 return;
             }
             const charBase = vData.CharBase;
-            if (charBase.Name) {
+            if (charBase.Name && charBase.Name.length > 0) {
                 userDataManager.setName(playerUid, charBase.Name);
             }
-            if (charBase.FightPoint) {
+            if (charBase.FightPoint != null && charBase.FightPoint.toNumber) {
+                userDataManager.setFightPoint(playerUid, charBase.FightPoint.toNumber());
+            } else if (charBase.FightPoint != null) {
                 userDataManager.setFightPoint(playerUid, charBase.FightPoint);
             }
             if (!vData.ProfessionList) {
