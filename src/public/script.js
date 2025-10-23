@@ -333,20 +333,14 @@ async function clearData() {
         fightStartTs = 0; lastCombatTs = 0; lastTotals = { dmg: 0, heal: 0 }; lastPerUser = {};
         updateAll();
 
-        // Ask server to clear on next packet (more robust), fallback to immediate clear
-        let ok = false; let msg = '';
+        // Ask server to clear immediately (same flow as OOC timeout)
+        let msg = '';
+        let ok = false;
         try {
-            const r1 = await fetch(`/api/clear-request`, { method: 'POST' });
-            const j1 = await r1.json();
-            ok = j1?.code === 0; msg = j1?.msg || '';
+            const resp = await fetch(`/api/clear`);
+            const js = await resp.json();
+            ok = js?.code === 0; msg = js?.msg || '';
         } catch (e) { ok = false; }
-        if (!ok) {
-            try {
-                const r2 = await fetch(`/api/clear`);
-                const j2 = await r2.json();
-                ok = j2?.code === 0; msg = j2?.msg || '';
-            } catch (e) { ok = false; }
-        }
 
         if (ok) {
             showServerStatus('cleared');
