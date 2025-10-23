@@ -14,6 +14,10 @@
       .grid { display:flex; gap:16px; align-items:flex-start; }
       .left { width: 280px; flex: 0 0 280px; }
       .right { flex:1 1 auto; min-width: 0; }
+      .legend { margin-top: 8px; display:flex; flex-direction: column; gap:6px; max-height: 260px; overflow:auto; }
+      .legend-item { display:flex; align-items:center; gap:8px; font-size:12px; color:#ddd; }
+      .swatch { width:12px; height:12px; border-radius: 2px; border:1px solid rgba(255,255,255,0.3); }
+      #line { width:100%; height:140px; background:#0d0d0d; border:1px solid rgba(255,255,255,0.1); border-radius:6px; }
       .bd-table { width:100%; border-collapse: collapse; font-size:12px; }
       .bd-table thead th { position: sticky; top: 0; background: #151515; color:#ddd; text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.15); }
       .bd-table tbody td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
@@ -29,8 +33,10 @@
       <div class="grid">
         <div class="left">
           <canvas id="pie" width="260" height="260" style="background:#0d0d0d; border:1px solid rgba(255,255,255,0.1); border-radius:6px;"></canvas>
+          <div id="legend" class="legend"></div>
         </div>
         <div class="right">
+          <canvas id="line"></canvas>
           <table class="bd-table" id="tTable"><thead>
             <tr><th>Skill</th><th style="text-align:right">Total</th><th style="text-align:right">DPS</th><th style="text-align:right">Hits</th><th style="text-align:right">Crit%</th><th style="text-align:right">Avg/Hit</th><th style="text-align:right">%</th></tr>
           </thead><tbody id="tBody"></tbody></table>
@@ -40,21 +46,42 @@
     <script>
       const SERVER_URL = 'localhost:8990';
       function fmt(n){ if(n>=1e6)return (n/1e6).toFixed(1)+'M'; if(n>=1e3)return (n/1e3).toFixed(1)+'K'; return Math.round(n).toString(); }
+      const COLORS = [ '#4caf50','#2196f3','#ff9800','#9c27b0','#00bcd4','#e91e63','#8bc34a','#ffc107','#03a9f4','#795548' ];
       function drawPie(rows,total){
         const canvas = document.getElementById('pie');
         if(!canvas) return; const ctx = canvas.getContext('2d');
         ctx.clearRect(0,0,canvas.width,canvas.height);
         const cx = canvas.width/2, cy = canvas.height/2, r = Math.min(cx, cy)-8;
         let start = -Math.PI/2;
-        const colors = [ '#4caf50','#2196f3','#ff9800','#9c27b0','#00bcd4','#e91e63','#8bc34a','#ffc107','#03a9f4','#795548' ];
         rows.forEach((row, i)=>{
           const angle = (row.sum/total)*Math.PI*2;
           ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,start,start+angle,false); ctx.closePath();
-          ctx.fillStyle = colors[i % colors.length]; ctx.fill();
+          ctx.fillStyle = COLORS[i % COLORS.length]; ctx.fill();
           start += angle;
         });
         // center hole slight shading for aesthetics
         ctx.beginPath(); ctx.arc(cx,cy, r*0.5, 0, Math.PI*2); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
+        // legend
+        const lg = document.getElementById('legend'); if(lg){ lg.innerHTML='';
+          rows.forEach((row,i)=>{
+            const it = document.createElement('div'); it.className='legend-item';
+            const sw = document.createElement('div'); sw.className='swatch'; sw.style.backgroundColor = COLORS[i % COLORS.length];
+            const label = document.createElement('div'); label.textContent = `${row.name} — ${row.pct.toFixed(1)}%`;
+            it.appendChild(sw); it.appendChild(label); lg.appendChild(it);
+          });
+        }
+      }
+      function drawLine(points){
+        const canvas = document.getElementById('line'); if(!canvas) return; const ctx = canvas.getContext('2d');
+        const w = canvas.width = canvas.clientWidth; const h = canvas.height = canvas.clientHeight;
+        ctx.clearRect(0,0,w,h);
+        if(points.length < 2) return; const maxY = Math.max(...points.map(p=>p.y)) || 1; const maxX = Math.max(...points.map(p=>p.x)) || 1;
+        const pad = 24; const iw = w - pad*2; const ih = h - pad*2;
+        ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.beginPath();
+        ctx.moveTo(pad, h-pad); ctx.lineTo(w-pad, h-pad); ctx.moveTo(pad, pad); ctx.lineTo(pad, h-pad); ctx.stroke();
+        ctx.strokeStyle = '#4caf50'; ctx.lineWidth = 2; ctx.beginPath();
+        points.forEach((p,idx)=>{ const x = pad + (p.x/maxX)*iw; const y = h - pad - (p.y/maxY)*ih; if(idx===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+        ctx.stroke();
       }
       window.electronAPI.onBreakdownLoad(async ({ uid, timestamp }) => {
         try{
@@ -85,6 +112,13 @@
             const sum = s.totalDamage||0; const cnt = s.totalCount||0; const avg = cnt? sum/cnt:0; const cr = s.critRate!=null? s.critRate : (cnt? (s.critCount||0)/cnt:0); return {name: s.displayName||sid, sum, cnt, avg, cr, pct: (sum/total)*100};
           }).sort((a,b)=> b.sum-a.sum);
           drawPie(rows, total);
+          // Line chart from live dps_series if present
+          if (Array.isArray(d.dps_series) && d.dps_series.length) {
+            drawLine(d.dps_series);
+          } else {
+            // basic approximation from cumulative total if no series
+            const pts = []; const steps = 20; const sec = activeSeconds || 20; for(let i=0;i<=steps;i++){ pts.push({ x: Math.round((i/steps)*sec), y: (total*(i/steps))/Math.max(1,sec) }); } drawLine(pts);
+          }
           const tb = document.getElementById('tBody'); tb.innerHTML='';
           // Estimate active seconds from total DPS if available when live
           if(!activeSeconds && d.total_dps && total){ activeSeconds = Math.max(1, Math.floor(total / d.total_dps)); }

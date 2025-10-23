@@ -258,6 +258,8 @@ class UserDataManager {
     getUserSkillData(uid) {
         const user = this.users.get(uid);
         if (!user) return null;
+        // Build simple per-second DPS series from realtime window if available
+        const dSeries = (user.damageStats?.realtimeWindow || []).map((e)=> ({ x: Math.floor((e.time - this.startTime)/1000), y: e.value || 0 }));
         return {
             uid: user.uid,
             name: user.name,
@@ -265,6 +267,7 @@ class UserDataManager {
             total_dps: user.getTotalDps(),
             skills: user.getSkillSummary(),
             attr: user.attr,
+            dps_series: dSeries,
         };
     }
 
@@ -375,6 +378,7 @@ class UserDataManager {
                     total_dps: user.getTotalDps(),
                     skills: user.getSkillSummary(),
                     attr: user.attr,
+                    dps_series: [],
                 };
                 userDatas.set(uid, userData);
             }
