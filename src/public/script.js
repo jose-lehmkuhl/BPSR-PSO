@@ -512,6 +512,22 @@ function setBackgroundOpacity(value) {
     document.documentElement.style.setProperty('--main-bg-opacity', value);
 }
 
+async function softRelaunch() {
+    try {
+        // Immediately wipe UI
+        allUsers = {}; allEnemies = {}; userColors = {};
+        currentEncounter = 'current'; historicalUsers = null; historicalEnemies = null;
+        fightStartTs = 0; lastCombatTs = 0; lastTotals = { dmg: 0, heal: 0 }; lastPerUser = {};
+        updateAll();
+
+        // Reset backend state without saving current log
+        try { await fetch(`/api/reset`, { method: 'POST' }); } catch (_) {}
+    } finally {
+        // Reload renderer to simulate relaunch without closing the window
+        try { location.reload(); } catch (_) {}
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initialize();
     // Load current hotkeys
@@ -747,7 +763,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.clearData = clearData;
-window.relaunchApp = () => { try { window.electronAPI.relaunchApp(); } catch (e) { location.reload(); } };
+window.relaunchApp = () => { try { window.softRelaunch(); } catch (e) { location.reload(); } };
 window.togglePause = togglePause;
 window.toggleSettings = toggleSettings;
 window.closeClient = closeClient;

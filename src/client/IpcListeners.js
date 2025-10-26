@@ -76,6 +76,6 @@ ipcMain.handle('reset-checklist', (event, type) => {
 });
 
 ipcMain.on('relaunch-app', () => {
-    app.relaunch();
-    app.exit(0);
+    // Soft relaunch: trigger renderer reset without closing the main window
+    try { window.getWindow().webContents.executeJavaScript('window.softRelaunch && window.softRelaunch()'); } catch (e) {}
 });
