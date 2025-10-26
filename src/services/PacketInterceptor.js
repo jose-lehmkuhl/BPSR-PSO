@@ -13,16 +13,11 @@ const decoders = cap.decoders;
 const PROTOCOL = decoders.PROTOCOL;
 
 const clearDataOnServerChange = () => {
-    userDataManager.refreshEnemyCache();
-    if (
-        !globalSettings.autoClearOnServerChange ||
-        userDataManager.lastLogTime === 0 ||
-        userDataManager.users.size === 0
-    ) {
-        return;
-    }
-    userDataManager.clearAll();
-    logger.info('Server changed, statistics cleared!');
+    if (!globalSettings.autoClearOnServerChange) return;
+    // Arm a clear on the next incoming combat packet so the new encounter
+    // starts exactly at the first event after map/server change
+    try { userDataManager.requestClear(); } catch (_) {}
+    logger.info('Server changed, clear requested on next packet.');
 };
 
 export class PacketInterceptor {

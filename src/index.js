@@ -1,6 +1,7 @@
 import squirrelStartup from 'electron-squirrel-startup';
 import { app, BrowserWindow, globalShortcut } from 'electron';
 import { checkForNpcap } from './client/npcapHandler.js';
+import userDataManager from './services/UserDataManager.js';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 // This must be the very first thing the app does.
@@ -27,6 +28,8 @@ async function initialize() {
     }
 
     window.create();
+    // Trigger an initial OOC arm so the first combat starts clean after app open
+    try { userDataManager.requestClear(); } catch (_) {}
     registerShortcuts();
 
     try {
