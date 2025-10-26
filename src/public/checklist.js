@@ -1,25 +1,43 @@
 const DEFAULT_DAILY = [
-    'World Boss Keys',
-    'World Boss Crusade',
-    'Elite Boss Keys',
-    'Commissions',
-    'Homestead Commissions',
-    'Unstable Space Dungeon',
-    'Season Activity Goals',
-    'Focus',
-    'Guild Check-In',
-    'Guild Cargo',
-    'Mystery Shop',
-    'Guild Hunt',
+    { name: 'World Boss Keys', color: 'red', icon: 'daily_1.webp' },
+    { name: 'World Boss Crusade', color: 'red', icon: 'daily_10.webp' },
+    { name: 'Elite Boss Keys', color: 'red', icon: 'daily_2.webp' },
+    { name: 'Commissions', color: 'purple', icon: 'daily_3.webp' },
+    { name: 'Homestead Commissions', color: 'purple', icon: 'daily_4.webp' },
+    { name: 'Unstable Space Dungeon', color: 'blue', icon: 'daily_5.webp' },
+    { name: 'Season Activity Goals', color: 'green', icon: 'daily_6.webp' },
+    { name: 'Focus', color: 'pink', icon: 'daily_7.webp' },
+    { name: 'Guild Check-In', color: 'yellow', icon: 'daily_8.webp' },
+    { name: 'Guild Cargo', color: 'yellow', icon: 'daily_9.webp' },
+    { name: 'Mystery Shop', color: 'brown', icon: 'daily_11.webp' },
+    { name: 'Guild Hunt', color: 'yellow', icon: 'daily_12.webp' },
 ];
 
 const DEFAULT_WEEKLY = [
-    'Guild Shop', 'Guild Activity Rewards', 'Trailblaze Rewards - Dungeons', 'Trailblaze Rewards - Bosses', 'Trailblaze Rewards - Focus',
-    'Colorful Shop', 'Friendship Shop', 'Honor Shop', 'Reputation Shop', 'Season Pass Shop', 'Life Skill Quests', 'Void Spawn Boxes',
-    'Crusade Reward Path', 'Stimen Vaults', 'Reclaim Hub',
-    'Ice Dragon Raid - Normal', 'Ice Dragon Raid - Hard', 'Ice Dragon Raid - Nightmare',
-    'Dark Dragon Raid - Normal', 'Dark Dragon Raid - Hard', 'Dark Dragon Raid - Nightmare',
-    'Light Dragon Raid - Normal', 'Light Dragon Raid - Hard', 'Light Dragon Raid - Nightmare'
+    { name: 'Guild Shop', color: 'yellow', icon: 'weekly_1.webp' },
+    { name: 'Guild Activity Rewards', color: 'yellow', icon: 'weekly_8.webp' },
+    { name: 'Trailblaze Rewards - Dungeons', color: 'cyan', icon: 'weekly_2.webp' },
+    { name: 'Trailblaze Rewards - Bosses', color: 'cyan', icon: 'weekly_2.webp' },
+    { name: 'Trailblaze Rewards - Focus', color: 'cyan', icon: 'weekly_2.webp' },
+    { name: 'Colorful Shop', color: 'brown', icon: 'weekly_3.webp' },
+    { name: 'Friendship Shop', color: 'brown', icon: 'weekly_4.webp' },
+    { name: 'Honor Shop', color: 'brown', icon: 'weekly_5.webp' },
+    { name: 'Reputation Shop', color: 'brown', icon: 'weekly_6.webp' },
+    { name: 'Season Pass Shop', color: 'brown', icon: 'weekly_7.webp' },
+    { name: 'Life Skill Quests', color: 'green', icon: 'weekly_9.webp' },
+    { name: 'Void Spawn Boxes', color: 'purple', icon: 'weekly_10.webp' },
+    { name: 'Crusade Reward Path', color: 'yellow', icon: 'weekly_11.webp' },
+    { name: 'Stimen Vaults', color: 'yellow', icon: 'weekly_12.webp' },
+    { name: 'Reclaim Hub', color: 'brown', icon: 'weekly_13.webp' },
+    { name: 'Ice Dragon Raid - Normal', color: 'cyan', icon: 'must_1.webp' },
+    { name: 'Ice Dragon Raid - Hard', color: 'cyan', icon: 'must_1.webp' },
+    { name: 'Ice Dragon Raid - Nightmare', color: 'cyan', icon: 'must_1.webp' },
+    { name: 'Dark Dragon Raid - Normal', color: 'red', icon: 'must_2.webp' },
+    { name: 'Dark Dragon Raid - Hard', color: 'red', icon: 'must_2.webp' },
+    { name: 'Dark Dragon Raid - Nightmare', color: 'red', icon: 'must_2.webp' },
+    { name: 'Light Dragon Raid - Normal', color: 'yellow', icon: 'must_3.webp' },
+    { name: 'Light Dragon Raid - Hard', color: 'yellow', icon: 'must_3.webp' },
+    { name: 'Light Dragon Raid - Nightmare', color: 'yellow', icon: 'must_3.webp' },
 ];
 
 const dailyGrid = document.getElementById('dailyGrid');
@@ -36,11 +54,14 @@ function updateProgress(container, progressEl) {
     progressEl.textContent = `${completed} of ${total} completed`;
 }
 
-function renderList(container, names, state, onToggle) {
+const ICON_BASE = 'assets/checklist/';
+
+function renderList(container, items, state, onToggle) {
     container.innerHTML = '';
-    for (const name of names) {
+    for (const it of items) {
+        const name = it.name;
         const item = document.createElement('div');
-        item.className = 'cl-item';
+        item.className = `cl-item ${it.color||''}`;
         const input = document.createElement('input');
         input.type = 'checkbox';
         input.checked = !!state[name];
@@ -52,8 +73,16 @@ function renderList(container, names, state, onToggle) {
             input.checked = !input.checked;
             onToggle(name, input.checked);
         });
+        const imgWrap = document.createElement('div');
+        imgWrap.className = 'image';
+        const img = document.createElement('img');
+        img.className = 'cl-img';
+        img.alt = name;
+        if (it.icon) img.src = ICON_BASE + it.icon; // will 404 until assets are added; harmless
+        imgWrap.appendChild(img);
         const label = document.createElement('span');
         label.textContent = name;
+        item.appendChild(imgWrap);
         item.appendChild(input);
         item.appendChild(label);
         container.appendChild(item);
