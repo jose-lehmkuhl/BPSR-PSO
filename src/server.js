@@ -81,7 +81,8 @@ class Server {
                     code: 0,
                     user: userData,
                     enemies: enemiesData,
-                    fightStartTime: userDataManager.startTime,
+                    // Emit 0 until first damage to avoid early timer start on the client
+                    fightStartTime: (userDataManager.lastLogTime > 0 ? userDataManager.startTime : 0),
                     lastActivityTime: userDataManager.lastLogTime,
                 });
             }

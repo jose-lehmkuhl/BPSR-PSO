@@ -287,8 +287,8 @@ function processDataUpdate(data) {
     const sumHeal = Object.values(allUsers).reduce((s,u)=> s + ((u.total_healing?.total)||0), 0);
     // Per-user decrease heuristic removed to avoid false positives mid-combat
     // Combat timing: detect activity only when totals increase (not just > 0)
-    const increased = sumDmg > lastTotals.dmg || sumHeal > lastTotals.heal;
-    if (increased) {
+    const increasedDamage = sumDmg > lastTotals.dmg;
+    if (increasedDamage) {
         const oocSec = parseInt(oocTimer?.value || '15', 10);
         const newFightDetected = fightStartTs && lastCombatTs && (nowTs - lastCombatTs) >= oocSec * 1000;
         if (newFightDetected) {
@@ -307,11 +307,11 @@ function processDataUpdate(data) {
     }
 
     // Use server-provided timing for accurate fight window
-    if (data.fightStartTime) {
-        if (fightStartTs !== data.fightStartTime) {
+    if (data.fightStartTime && data.fightStartTime > 0) {
+        // Adopt server-provided fight start only if we haven't started locally yet
+        if (!fightStartTs) {
             lastKnownFightStart = fightStartTs || 0;
             fightStartTs = data.fightStartTime;
-            // On new fight (server-side clear), refresh encounter labels shortly
             if (currentEncounter === 'current') {
                 setTimeout(() => { if (window.refreshEncounters) window.refreshEncounters(); }, 700);
             }
@@ -337,17 +337,13 @@ async function clearData() {
         let msg = '';
         let ok = false;
         try {
-            const resp = await fetch(`/api/clear`);
+            const resp = await fetch(`/api/reset`, { method: 'POST' });
             const js = await resp.json();
             ok = js?.code === 0; msg = js?.msg || '';
         } catch (e) { ok = false; }
 
-        if (ok) {
-            showServerStatus('cleared');
-            console.log('Encounter reset/clear requested; counting from zero.');
-        } else {
-            console.error('Failed to reset/clear encounter on server:', msg);
-        }
+        if (ok) { showServerStatus('cleared'); console.log('Encounter reset requested; current log discarded.'); }
+        else { console.error('Failed to reset encounter on server:', msg); }
 
         setTimeout(() => showServerStatus(currentStatus), 1000);
     } catch (error) {

@@ -30,8 +30,8 @@ function registerDynamicHotkeys() {
     }
     if (clearHotkey) {
         globalShortcut.register(clearHotkey, () => {
-            // Relaunch the app (same effect as pressing the Refresh button)
-            try { app.relaunch(); app.exit(0); } catch (_) {}
+            // Trigger in-app reset: discard current log and start fresh
+            window.webContents.executeJavaScript('window.clearData && window.clearData()').catch(()=>{});
         });
     }
 }
