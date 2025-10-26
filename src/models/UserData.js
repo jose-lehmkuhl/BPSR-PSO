@@ -25,8 +25,7 @@ function getSubProfessionBySkillId(skillId) {
         case 1714:
         case 1734:
             return '(Iaido Slash)';
-        case 44701:
-        case 179906:
+        case 1715:
             return '(Moonstrike)';
         case 220112:
         case 2203622:
