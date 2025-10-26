@@ -752,3 +752,4 @@ window.togglePause = togglePause;
 window.toggleSettings = toggleSettings;
 window.closeClient = closeClient;
 window.toggleHelp = toggleHelp;
+window.openChecklist = () => { try { window.electronAPI.openChecklist(); } catch (e) {} };

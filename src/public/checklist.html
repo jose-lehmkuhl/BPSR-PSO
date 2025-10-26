@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Checklist</title>
+        <link rel="stylesheet" href="style.css" />
+        <style>
+            .cl-wrap { padding: 12px; color: #fff; }
+            .cl-header { display:flex; align-items:center; justify-content: space-between; gap:8px; margin-bottom: 12px; }
+            .cl-title { font-weight: 700; font-size: 16px; }
+            .cl-section { background: rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius: 8px; margin-bottom: 12px; }
+            .cl-section-header { display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; border-bottom:1px solid rgba(255,255,255,0.08); }
+            .cl-grid { padding: 12px; display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+            .cl-item { display:flex; align-items:center; gap:10px; background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:8px; }
+            .cl-item input[type="checkbox"] { width:18px; height:18px; }
+            .btn { background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px 10px; border-radius:6px; cursor:pointer; }
+            .btn:hover { background: rgba(255,255,255,0.12); }
+            .btn-danger { background: rgba(255,0,0,0.15); border-color: rgba(255,0,0,0.35); }
+            .muted { color:#ccc; font-size: 12px; }
+        </style>
+    </head>
+    <body>
+        <div class="cl-wrap">
+            <div class="cl-header">
+                <div class="cl-title">Checklist</div>
+                <div style="display:flex; gap:8px;">
+                    <button id="resetDaily" class="btn btn-danger" title="Uncheck all daily">Reset Daily</button>
+                    <button id="resetWeekly" class="btn btn-danger" title="Uncheck all weekly">Reset Weekly</button>
+                </div>
+            </div>
+
+            <div class="cl-section">
+                <div class="cl-section-header">
+                    <div style="font-weight:600;">Daily</div>
+                    <div class="muted" id="dailyProgress">0 completed</div>
+                </div>
+                <div class="cl-grid" id="dailyGrid"></div>
+            </div>
+
+            <div class="cl-section">
+                <div class="cl-section-header">
+                    <div style="font-weight:600;">Weekly</div>
+                    <div class="muted" id="weeklyProgress">0 completed</div>
+                </div>
+                <div class="cl-grid" id="weeklyGrid"></div>
+            </div>
+        </div>
+        <script src="checklist.js"></script>
+    </body>
+    </html>
+
+

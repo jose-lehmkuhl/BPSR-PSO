@@ -8,4 +8,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openBreakdown: (payload) => ipcRenderer.send('open-breakdown', payload),
     onBreakdownLoad: (callback) => ipcRenderer.on('breakdown-load', (_event, payload) => callback(payload)),
     relaunchApp: () => ipcRenderer.send('relaunch-app'),
+    // Checklist APIs
+    openChecklist: () => ipcRenderer.send('open-checklist'),
+    getChecklist: () => ipcRenderer.invoke('get-checklist'),
+    saveChecklist: (payload) => ipcRenderer.invoke('save-checklist', payload),
+    resetChecklist: (type) => ipcRenderer.invoke('reset-checklist', type),
 });
