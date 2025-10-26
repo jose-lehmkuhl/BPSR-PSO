@@ -19,6 +19,9 @@ export function createChecklistWindow() {
         minWidth: 480,
         minHeight: 400,
         title: 'Checklist',
+        backgroundColor: '#0f1113',
+        transparent: false,
+        frame: false,
         webPreferences: { nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, '../preload.js') },
     });
     checklistWin.setMenuBarVisibility(false);

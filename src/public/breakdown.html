@@ -6,10 +6,13 @@
     <title>DPS Breakdown</title>
     <link rel="stylesheet" href="style.css" />
     <style>
-      body { background:#111; margin:0; color:#fff; font-family: 'Roboto Condensed', sans-serif; }
-      .wrap { padding: 10px 12px; }
-      .hdr { display:flex; align-items:center; justify-content: space-between; margin-bottom:8px; }
-      .title { font-size: 16px; font-weight: 700; }
+      body { background:#0f1113; margin:0; color:#fff; font-family: 'Roboto Condensed', sans-serif; }
+      .chrome { display:flex; flex-direction:column; height:100vh; background: #303335; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 30px rgba(0,0,0,0.2); }
+      .hdr { -webkit-app-region: drag; display:flex; align-items:center; justify-content: space-between; padding:6px 10px; background:#121517; border-bottom:1px solid rgba(255,255,255,0.1); }
+      .btn { -webkit-app-region: no-drag; background: rgba(255, 255, 255, 0.16); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:4px 8px; border-radius:3px; font-size:12px; cursor:pointer; }
+      .btn:hover { background: rgba(255,255,255,0.2); }
+      .wrap { padding: 10px 12px; flex:1; overflow:auto; }
+      .title { font-size: 12px; font-weight: 700; }
       .sub { color:#ccc; font-size:12px; }
       .grid { display:flex; gap:16px; align-items:flex-start; }
       .left { width: 280px; flex: 0 0 280px; }
@@ -25,11 +28,15 @@
     </style>
   </head>
   <body>
-    <div class="wrap">
+    <div class="chrome">
       <div class="hdr">
         <div class="title" id="tTitle">DPS Breakdown</div>
-        <div class="sub" id="tMeta"></div>
+        <div style="display:flex; gap:8px; -webkit-app-region: no-drag; align-items:center;">
+          <div class="sub" id="tMeta"></div>
+          <button id="bdClose" class="btn">✕</button>
+        </div>
       </div>
+      <div class="wrap">
       <div class="grid">
         <div class="left">
           <canvas id="pie" width="260" height="260" style="background:#0d0d0d; border:1px solid rgba(255,255,255,0.1); border-radius:6px;"></canvas>
@@ -41,6 +48,7 @@
             <tr><th>Skill</th><th style="text-align:right">Total</th><th style="text-align:right">DPS</th><th style="text-align:right">Hits</th><th style="text-align:right">Crit%</th><th style="text-align:right">Avg/Hit</th><th style="text-align:right">%</th></tr>
           </thead><tbody id="tBody"></tbody></table>
         </div>
+      </div>
       </div>
     </div>
     <script>
@@ -129,6 +137,7 @@
           }
         }catch{}
       });
+      const bdClose = document.getElementById('bdClose'); if (bdClose) { bdClose.addEventListener('click', ()=> window.close()); }
     </script>
   </body>
  </html>

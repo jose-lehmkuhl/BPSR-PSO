@@ -45,6 +45,13 @@ function renderList(container, names, state, onToggle) {
         input.type = 'checkbox';
         input.checked = !!state[name];
         input.addEventListener('change', ()=> onToggle(name, input.checked));
+        // Make the entire item clickable to toggle
+        item.addEventListener('click', (e)=>{
+            // avoid double toggle if the event originated on the checkbox itself
+            if (e.target === input) return;
+            input.checked = !input.checked;
+            onToggle(name, input.checked);
+        });
         const label = document.createElement('span');
         label.textContent = name;
         item.appendChild(input);
@@ -99,6 +106,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderList(weeklyGrid, DEFAULT_WEEKLY, state.weekly || {}, onWeeklyToggle);
         updateProgress(weeklyGrid, weeklyProgress);
     });
+
+    const closeBtn = document.getElementById('closeChecklist');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', ()=>{
+            window.close();
+        });
+    }
 });
 
 

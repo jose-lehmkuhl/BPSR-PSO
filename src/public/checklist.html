@@ -6,30 +6,35 @@
         <title>Checklist</title>
         <link rel="stylesheet" href="style.css" />
         <style>
-            .cl-wrap { padding: 12px; color: #fff; }
-            .cl-header { display:flex; align-items:center; justify-content: space-between; gap:8px; margin-bottom: 12px; }
-            .cl-title { font-weight: 700; font-size: 16px; }
-            .cl-section { background: rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius: 8px; margin-bottom: 12px; }
+            /* mimic main container chrome, but without transparency */
+            html, body { background:#0f1113; }
+            .cl-container { display:flex; flex-direction:column; height:100vh; box-sizing:border-box; border-radius:4px; overflow:hidden; background: #303335; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 30px rgba(0,0,0,0.2); }
+            .cl-controls { -webkit-app-region: drag; display:flex; align-items:center; justify-content: space-between; padding:6px 10px; background:#121517; border-bottom:1px solid rgba(255,255,255,0.1); }
+            .cl-title { font-weight:700; font-size:12px; color:#fff; }
+            .cl-content { flex:1; overflow:auto; padding:12px; color:#fff; }
+            .btn { -webkit-app-region: no-drag; background: rgba(255, 255, 255, 0.16); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:4px 8px; border-radius:3px; font-size:12px; cursor:pointer; }
+            .btn:hover { background: rgba(255,255,255,0.2); }
+            .btn-danger { background: rgba(255,0,0,0.25); border-color: rgba(255,0,0,0.4); }
+            .cl-section { background: rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.1); border-radius: 6px; margin-bottom: 12px; }
             .cl-section-header { display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; border-bottom:1px solid rgba(255,255,255,0.08); }
-            .cl-grid { padding: 12px; display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-            .cl-item { display:flex; align-items:center; gap:10px; background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:8px; }
-            .cl-item input[type="checkbox"] { width:18px; height:18px; }
-            .btn { background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:6px 10px; border-radius:6px; cursor:pointer; }
-            .btn:hover { background: rgba(255,255,255,0.12); }
-            .btn-danger { background: rgba(255,0,0,0.15); border-color: rgba(255,0,0,0.35); }
+            .cl-grid { padding: 10px; display:grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+            .cl-item { display:flex; align-items:center; gap:10px; background: rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:8px; cursor:pointer; }
+            .cl-item:hover { background: rgba(255,255,255,0.1); }
+            .cl-item input[type="checkbox"] { width:18px; height:18px; pointer-events:none; }
             .muted { color:#ccc; font-size: 12px; }
         </style>
     </head>
     <body>
-        <div class="cl-wrap">
-            <div class="cl-header">
+        <div class="cl-container">
+            <div class="cl-controls">
                 <div class="cl-title">Checklist</div>
-                <div style="display:flex; gap:8px;">
+                <div style="display:flex; gap:8px; -webkit-app-region: no-drag;">
                     <button id="resetDaily" class="btn btn-danger" title="Uncheck all daily">Reset Daily</button>
                     <button id="resetWeekly" class="btn btn-danger" title="Uncheck all weekly">Reset Weekly</button>
+                    <button id="closeChecklist" class="btn" title="Close">✕</button>
                 </div>
             </div>
-
+            <div class="cl-content">
             <div class="cl-section">
                 <div class="cl-section-header">
                     <div style="font-weight:600;">Daily</div>
@@ -44,6 +49,7 @@
                     <div class="muted" id="weeklyProgress">0 completed</div>
                 </div>
                 <div class="cl-grid" id="weeklyGrid"></div>
+            </div>
             </div>
         </div>
         <script src="checklist.js"></script>

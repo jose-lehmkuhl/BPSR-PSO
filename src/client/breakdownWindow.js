@@ -20,6 +20,9 @@ export function createBreakdownWindow({ uid, timestamp }) {
         minWidth: 700,
         minHeight: 400,
         title: 'Skill Breakdown',
+        backgroundColor: '#0f1113',
+        transparent: false,
+        frame: false,
         webPreferences: { nodeIntegration: false, contextIsolation: true, preload: path.join(__dirname, '../preload.js') },
     });
     breakdownWin.setMenuBarVisibility(false);
