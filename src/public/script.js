@@ -90,6 +90,7 @@ let wasOnCurrentEncounter = true;
 let historicalUsers = null;
 let historicalEnemies = null;
 let lastKnownFightStart = 0;
+let historicalEncounterSeconds = null;
 
 const SERVER_URL = window.location.host;
 
@@ -98,6 +99,16 @@ function formatNumber(num) {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
     return Math.round(num).toString();
+}
+
+function getCurrentEncounterSeconds() {
+    if (currentEncounter !== 'current') return null;
+    const now = Date.now();
+    const oocSec = parseInt(oocTimer?.value || '15', 10);
+    if (!fightStartTs || !lastCombatTs) return 0;
+    const sinceLast = now - lastCombatTs;
+    const ms = sinceLast < oocSec * 1000 ? (now - fightStartTs) : (lastCombatTs - fightStartTs);
+    return Math.max(1, Math.floor(ms / 1000));
 }
 
 function renderDataList(users) {
@@ -112,12 +123,21 @@ function renderDataList(users) {
     const topTaken  = Math.max(1, ...users.map(u => (u.taken_damage || 0)));
 
     const mode = rankingMode;
+    const encSec = (currentEncounter === 'current') ? getCurrentEncounterSeconds() : (historicalEncounterSeconds || null);
     if (mode === 'hps') {
-        users.sort((a, b) => b.total_hps - a.total_hps);
+        users.sort((a, b) => {
+            const ah = (currentEncounter === 'current' && encSec) ? ((a.total_healing?.total || 0) / encSec) : (a.total_hps || 0);
+            const bh = (currentEncounter === 'current' && encSec) ? ((b.total_healing?.total || 0) / encSec) : (b.total_hps || 0);
+            return bh - ah;
+        });
     } else if (mode === 'tanking') {
         users.sort((a, b) => (b.taken_damage || 0) - (a.taken_damage || 0));
     } else {
-        users.sort((a, b) => b.total_dps - a.total_dps);
+        users.sort((a, b) => {
+            const ad = (currentEncounter === 'current' && encSec) ? ((a.total_damage?.total || 0) / encSec) : (a.total_dps || 0);
+            const bd = (currentEncounter === 'current' && encSec) ? ((b.total_damage?.total || 0) / encSec) : (b.total_dps || 0);
+            return bd - ad;
+        });
     }
 
     users.forEach((user, index) => {
@@ -153,10 +173,12 @@ function renderDataList(users) {
         // Remove embedded HPS sub-bar from DPS tab to keep modes separate
         let subBarHtml = '';
 
-        let modeStats = `${formatNumber(user.total_damage.total)} (${formatNumber(user.total_dps)} DPS, ${damagePercent.toFixed(1)}%)`;
+        const displayDps = (encSec) ? ((user.total_damage.total || 0) / encSec) : (user.total_dps || 0);
+        const displayHps = (encSec) ? ((user.total_healing.total || 0) / encSec) : (user.total_hps || 0);
+        let modeStats = `${formatNumber(user.total_damage.total)} (${formatNumber(displayDps)} DPS, ${damagePercent.toFixed(1)}%)`;
         let mainBarFill = `<div class="dps-bar-fill" style="width: ${damagePercent}%; background-color: ${barColor};"></div>`;
         if (mode === 'hps') {
-            modeStats = `${formatNumber(user.total_healing.total)} (${formatNumber(user.total_hps)} HPS, ${healingPercent.toFixed(1)}%)`;
+            modeStats = `${formatNumber(user.total_healing.total)} (${formatNumber(displayHps)} HPS, ${healingPercent.toFixed(1)}%)`;
             mainBarFill = `<div class="hps-bar-fill" style="width: ${healingPercent}%; background-color: ${barColor};"></div>`;
         } else if (mode === 'tanking') {
             const tankTotal = user.taken_damage || 0;
@@ -434,14 +456,15 @@ function openBreakdown(user) {
     if (!user || !breakdownModal) return;
     // Build skills array from skill summaries on demand via API if historical; else from live snapshot composed server-side
     const uid = user.id;
-    const isHistorical = currentEncounter !== 'current';
-    const endpoint = isHistorical ? `http://${SERVER_URL}/api/history/${currentEncounter}/skill/${uid}` : `http://${SERVER_URL}/api/skill/${uid}`;
+        const isHistorical = currentEncounter !== 'current';
+        const endpoint = isHistorical ? `http://${SERVER_URL}/api/history/${currentEncounter}/skill/${uid}` : `http://${SERVER_URL}/api/skill/${uid}`;
     fetch(endpoint).then(r=>r.json()).then((resp)=>{
         if (!(resp?.code === 0 && resp.data)) return;
         const data = resp.data;
         const skills = data.skills || {};
         const totalSum = Object.values(skills).reduce((s, v)=> s + (v.totalDamage||0), 0) || 1;
-        const activeSeconds = Math.max(1, Math.floor((lastCombatTs && fightStartTs) ? (Math.max(0, (currentEncounter==='current' ? Date.now() : lastCombatTs) - fightStartTs)/1000) : 1));
+        const activeSeconds = isHistorical ? (historicalEncounterSeconds || 1)
+            : Math.max(1, Math.floor((lastCombatTs && fightStartTs) ? (Math.max(0, Date.now() - fightStartTs)/1000) : 1));
         const rows = Object.entries(skills).map(([sid, s]) => {
             const total = s.totalDamage || 0;
             const dps = total / activeSeconds;
@@ -684,11 +707,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentEncounter === 'current') {
                 historicalUsers = null;
                 historicalEnemies = null;
+                historicalEncounterSeconds = null;
                 updateAll();
                 wasOnCurrentEncounter = true;
                 return;
             }
             try {
+                // Load encounter meta to get duration seconds for historical DPS/HPS
+                try {
+                    const metaRes = await fetch(`/api/history/${currentEncounter}/meta`);
+                    const metaJs = await metaRes.json();
+                    if (metaJs?.code === 0 && metaJs.data) {
+                        const durMs = Number(metaJs.data.durationMs || 0);
+                        historicalEncounterSeconds = Math.max(1, Math.floor(durMs / 1000));
+                    } else {
+                        historicalEncounterSeconds = null;
+                    }
+                } catch (_) { historicalEncounterSeconds = null; }
                 const res = await fetch(`/api/history/${currentEncounter}/data`);
                 const json = await res.json();
                 if (json?.code === 0) {
