@@ -222,20 +222,73 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 enemyNames = objE || {};
             } catch (_) {}
             const raw = await fsPromises.readFile(eventsPath, 'utf8');
-            const lines = raw.split(/\\r?\\n/);
+            const lines = raw.split(/\r?\n/);
             const targetEnemy = Number.parseInt(enemyUid, 10);
-            const byAttacker = new Map();
+            // Build battle sections so scene NPC breakdown is the sum over sections
+            const secs = [];
+            let currentStart = null, lastEnd = -1, lastActiveTs = -1;
             for (const line of lines) {
                 if (!line) continue;
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
-                if (!obj || obj.type !== 'damage') continue;
-                const d = obj.data || {};
-                if (Number(d.targetUid) !== targetEnemy) continue;
-                const attackerUid = Number(d.attackerUid);
-                if (!Number.isFinite(attackerUid)) continue;
-                const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
-                if (val <= 0) continue;
-                byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
+                if (!obj || !obj.type) continue;
+                if (obj.type === 'damage' || obj.type === 'taken_damage') {
+                    const t = Number(obj.ts || 0);
+                    if (Number.isFinite(t)) {
+                        if (lastActiveTs < t) lastActiveTs = t;
+                        if (currentStart == null) currentStart = t;
+                    }
+                }
+                if (obj.type === 'battle_section_open') {
+                    const s = Number(obj?.data?.start || obj.ts || 0);
+                    if (s && currentStart == null) currentStart = s;
+                } else if (obj.type === 'battle_section_close') {
+                    const end = Number(obj?.data?.end || obj.ts || 0);
+                    if (currentStart != null && end >= currentStart && end !== lastEnd) {
+                        secs.push({ start: currentStart, end });
+                        lastEnd = end;
+                        currentStart = null;
+                    }
+                }
+            }
+            if (currentStart != null && lastActiveTs >= currentStart && lastActiveTs !== lastEnd) {
+                secs.push({ start: currentStart, end: lastActiveTs });
+            }
+            const byAttacker = new Map();
+            if (secs.length > 0) {
+                // Sum damage to this enemy across all sections
+                for (const line of lines) {
+                    if (!line) continue;
+                    let obj; try { obj = JSON.parse(line); } catch { continue; }
+                    if (!obj || obj.type !== 'damage') continue;
+                    const ts = Number(obj.ts || 0);
+                    // Check membership in any section (sections are few)
+                    let inSection = false;
+                    for (const s of secs) {
+                        if (ts >= s.start && ts <= s.end) { inSection = true; break; }
+                    }
+                    if (!inSection) continue;
+                    const d = obj.data || {};
+                    if (Number(d.targetUid) !== targetEnemy) continue;
+                    const attackerUid = Number(d.attackerUid);
+                    if (!Number.isFinite(attackerUid)) continue;
+                    const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                    if (val <= 0) continue;
+                    byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
+                }
+            } else {
+                // Fallback: whole scene
+                for (const line of lines) {
+                    if (!line) continue;
+                    let obj; try { obj = JSON.parse(line); } catch { continue; }
+                    if (!obj || obj.type !== 'damage') continue;
+                    const d = obj.data || {};
+                    if (Number(d.targetUid) !== targetEnemy) continue;
+                    const attackerUid = Number(d.attackerUid);
+                    if (!Number.isFinite(attackerUid)) continue;
+                    const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                    if (val <= 0) continue;
+                    byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
+                }
             }
             let total = 0;
             const items = [];
