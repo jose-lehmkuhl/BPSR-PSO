@@ -94,6 +94,8 @@ let historicalEncounterSeconds = null;
 let combatIdleMsFromServer = null;
 let combatTimeMsFromServer = null;
 let combatClockFromServer = { start: 0, last: 0, idle: 5000 };
+let liveEncounterSeconds = 0; // monotonic combat seconds within the current scene
+let lastSceneStartTs = 0;
 
 const SERVER_URL = window.location.host;
 
@@ -127,6 +129,9 @@ function renderTotalBar(users, encSec) {
 
 function getCurrentEncounterSeconds() {
     if (currentEncounter !== 'current') return null;
+    if (liveEncounterSeconds && liveEncounterSeconds > 0) {
+        return liveEncounterSeconds;
+    }
     if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer >= 0) {
         return Math.floor(combatTimeMsFromServer / 1000);
     }
@@ -434,9 +439,29 @@ function connectWebSocket() {
         if (data.enemies) {
             allEnemies = data.enemies || {};
         }
+        // Detect new scene by start time; reset live accumulator
+        if (typeof data.fightStartTime === 'number') {
+            if (lastSceneStartTs !== data.fightStartTime) {
+                lastSceneStartTs = data.fightStartTime;
+                liveEncounterSeconds = 0;
+            }
+        }
         if (typeof data.combatIdleMs === 'number') combatIdleMsFromServer = data.combatIdleMs;
         if (typeof data.combatTimeMs === 'number') combatTimeMsFromServer = data.combatTimeMs;
         if (data.combatClock && typeof data.combatClock === 'object') combatClockFromServer = data.combatClock;
+        // Update monotonic combat seconds to avoid transient drops
+        let secsCandidate = 0;
+        if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer >= 0) {
+            secsCandidate = Math.floor(combatTimeMsFromServer / 1000);
+        } else if (combatClockFromServer && combatClockFromServer.start && combatClockFromServer.last) {
+            const now = Date.now();
+            const clampEnd = Math.min(now, combatClockFromServer.last);
+            const ms = Math.max(0, clampEnd - combatClockFromServer.start);
+            secsCandidate = Math.floor(ms / 1000);
+        }
+        if (secsCandidate > liveEncounterSeconds) {
+            liveEncounterSeconds = secsCandidate;
+        }
         lastWebSocketMessage = Date.now();
         // Avoid overriding historical view on live updates
         if (currentEncounter === 'current') updateAll();
@@ -617,7 +642,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // Prefer server-provided combat time to display the timer
         let showMs;
-        if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer > 0) {
+        if (liveEncounterSeconds && liveEncounterSeconds > 0) {
+            showMs = liveEncounterSeconds * 1000;
+        } else if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer > 0) {
             showMs = combatTimeMsFromServer;
         } else if (combatClockFromServer && combatClockFromServer.start && combatClockFromServer.last) {
             // Exclude idle buffer: clamp to lastDamageTs
