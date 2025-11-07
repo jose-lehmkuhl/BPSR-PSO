@@ -248,15 +248,16 @@ class UserDataManager {
         const eventsFile = path.join(logDir, 'events.ndjson');
         const nowTs = Date.now();
 
+        // Guard against double-close/open races using simple idempotent checks
         // Close an open battle section if we've been idle for >= battleIdleMs
         if (this.currentBattleStartTs != null && this.lastDamageTs > 0) {
             if (nowTs - this.lastDamageTs >= this.battleIdleMs) {
-                // Close section at lastDamageTs (exclude idle)
+                // Close section at lastDamageTs (exclude idle); if already paused, no-op
                 const endTs = this.lastDamageTs;
                 const section = { start: this.currentBattleStartTs, end: endTs };
                 this.battleSections.push(section);
                 await this._writeEvent(eventsFile, logDir, 'battle_section_close', { start: section.start, end: section.end, durationMs: section.end - section.start });
-                this.currentBattleStartTs = null;
+                this.currentBattleStartTs = null; // paused
             }
         }
 
@@ -292,10 +293,9 @@ class UserDataManager {
     async _tickCombat(nowTs) {
         const logDir = path.join('./logs', String(this.startTime));
         const eventsFile = path.join(logDir, 'events.ndjson');
-        // Close if idle exceeded
+        // Close if idle exceeded; if already paused, do nothing
         if (this.currentBattleStartTs != null && this.lastDamageTs > 0) {
             if (nowTs - this.lastDamageTs >= this.battleIdleMs) {
-                // Close section at lastDamageTs (exclude idle)
                 const endTs = this.lastDamageTs;
                 const section = { start: this.currentBattleStartTs, end: endTs };
                 this.battleSections.push(section);
