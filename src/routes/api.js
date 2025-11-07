@@ -231,7 +231,7 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 if (Number(d.targetUid) !== targetEnemy) continue;
                 const attackerUid = Number(d.attackerUid);
                 if (!Number.isFinite(attackerUid)) continue;
-                const val = Number(d.value) || 0;
+                const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
                 if (val <= 0) continue;
                 byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
             }

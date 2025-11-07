@@ -593,8 +593,13 @@ function openBreakdown(user, modeOverride) {
         const skillEntries = Object.entries(skills)
             .filter(([sid, s]) => {
                 const t = (s?.type || '').toString();
-                if (isHpsMode) return t === '治疗';
-                return t === '伤害';
+                const sidNum = Number(sid);
+                if (isHpsMode) {
+                    // healing: explicit type or healing-sid heuristic (sid shifted by +1e9 in addHealing)
+                    return t === '治疗' || (Number.isFinite(sidNum) && sidNum >= 1000000000);
+                }
+                // damage: explicit type or sid below 1e9
+                return t === '伤害' || (Number.isFinite(sidNum) && sidNum < 1000000000);
             });
         const totalSum = skillEntries.reduce((s, [_, v])=> s + (v.totalDamage||0), 0) || 1;
         const activeSeconds = isHistorical
