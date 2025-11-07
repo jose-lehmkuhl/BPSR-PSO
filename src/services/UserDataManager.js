@@ -527,13 +527,20 @@ class UserDataManager {
 
             const allUsersData = {};
             const userDatas = new Map();
+            // Pre-compute combat time from snapshot if available
+            const sectionsSnap = Array.isArray(battleSectionsSnapshot) ? battleSectionsSnapshot : [];
+            const combatTimeMsSnap = sectionsSnap.reduce((acc, s) => acc + Math.max(0, (s.end || 0) - (s.start || 0)), 0);
             for (const [uid, user] of users.entries()) {
-                allUsersData[uid] = user.getSummary();
+                const summary = user.getSummary();
+                const totalDamage = user?.damageStats?.stats?.total || 0;
+                const dpsCombat = combatTimeMsSnap > 0 ? (totalDamage / combatTimeMsSnap) * 1000 : 0;
+                summary.total_dps = Number.isFinite(dpsCombat) ? dpsCombat : 0;
+                allUsersData[uid] = summary;
                 const userData = {
                     uid: user.uid,
                     name: user.name,
                     profession: user.profession + (user.subProfession ? `-${user.subProfession}` : ''),
-                    total_dps: user.getTotalDps(),
+                    total_dps: Number.isFinite(dpsCombat) ? dpsCombat : 0,
                     skills: user.getSkillSummary(),
                     attr: user.attr,
                     dps_series: Array.isArray((dpsSeriesSnapshot || this.userDpsSeries).get(uid)) ? (dpsSeriesSnapshot || this.userDpsSeries).get(uid) : [],
@@ -576,14 +583,16 @@ class UserDataManager {
                 // Compute combat sections and total combat time
                 const sections = Array.isArray(battleSectionsSnapshot) ? battleSectionsSnapshot : [];
                 const combatTimeMs = sections.reduce((acc, s) => acc + Math.max(0, (s.end || 0) - (s.start || 0)), 0);
+                const cmm = String(Math.floor((combatTimeMs || 0) / 60000)).padStart(2, '0');
+                const css = String(Math.floor(((combatTimeMs || 0) % 60000) / 1000)).padStart(2, '0');
 
                 const meta = {
                     name: topName,
                     targetCount: (enemiesTakenSnapshot ? enemiesTakenSnapshot.size : this.enemiesTaken.size),
-                    durationMs: summary.duration,
+                    durationMs: combatTimeMs,
                     startTime: summary.startTime,
                     endTime: summary.endTime,
-                    label: `${topName || 'Encounter'}(${enemiesTakenSnapshot ? enemiesTakenSnapshot.size : this.enemiesTaken.size}) [${mm}:${ss}]`,
+                    label: `${topName || 'Encounter'}(${enemiesTakenSnapshot ? enemiesTakenSnapshot.size : this.enemiesTaken.size}) [${cmm}:${css}]`,
                     combatSections: sections,
                     combatTimeMs,
                 };
