@@ -144,6 +144,113 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         }
     });
 
+    // Historical tanking breakdown by victim from events.ndjson
+    router.get('/history/:timestamp/tanking/:uid', async (req, res) => {
+        try {
+            const { timestamp, uid } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const usersPath = path.join(logDir, 'allUserData.json');
+            const enemiesPath = path.join(logDir, 'enemies.json');
+            let userNames = {};
+            let enemyNames = {};
+            try {
+                const rawU = await fsPromises.readFile(usersPath, 'utf8');
+                const objU = JSON.parse(rawU || '{}');
+                for (const [k, v] of Object.entries(objU || {})) {
+                    if (v && typeof v.name === 'string') userNames[k] = v.name;
+                }
+            } catch (_) {}
+            try {
+                const rawE = await fsPromises.readFile(enemiesPath, 'utf8');
+                const objE = JSON.parse(rawE || '{}');
+                enemyNames = objE || {};
+            } catch (_) {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\\r?\\n/);
+            const victim = Number.parseInt(uid, 10);
+            const byAttacker = new Map();
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || obj.type !== 'taken_damage') continue;
+                const d = obj.data || {};
+                if (Number(d.targetUid) !== victim) continue;
+                const attackerUid = Number(d.attackerUid);
+                if (!Number.isFinite(attackerUid)) continue;
+                const val = Number(d.value) || 0;
+                if (val <= 0) continue;
+                byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
+            }
+            let total = 0;
+            const items = [];
+            for (const [attackerUid, amount] of byAttacker.entries()) {
+                total += amount;
+                const name = userNames[String(attackerUid)] || enemyNames[String(attackerUid)] || `#${attackerUid}`;
+                items.push({ attackerUid, name, amount });
+            }
+            items.sort((a,b)=> b.amount - a.amount);
+            res.json({ code: 0, data: { victimUid: victim, total, items } });
+        } catch (e) {
+            logger.error('Failed to build historical tanking breakdown', e);
+            res.status(500).json({ code: 1, msg: 'Failed to get historical tanking breakdown' });
+        }
+    });
+
+    // Historical NPC breakdown by enemy from events.ndjson
+    router.get('/history/:timestamp/npc/:enemyUid', async (req, res) => {
+        try {
+            const { timestamp, enemyUid } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const usersPath = path.join(logDir, 'allUserData.json');
+            const enemiesPath = path.join(logDir, 'enemies.json');
+            let userNames = {};
+            let enemyNames = {};
+            try {
+                const rawU = await fsPromises.readFile(usersPath, 'utf8');
+                const objU = JSON.parse(rawU || '{}');
+                for (const [k, v] of Object.entries(objU || {})) {
+                    if (v && typeof v.name === 'string') userNames[k] = v.name;
+                }
+            } catch (_) {}
+            try {
+                const rawE = await fsPromises.readFile(enemiesPath, 'utf8');
+                const objE = JSON.parse(rawE || '{}');
+                enemyNames = objE || {};
+            } catch (_) {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\\r?\\n/);
+            const targetEnemy = Number.parseInt(enemyUid, 10);
+            const byAttacker = new Map();
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || obj.type !== 'damage') continue;
+                const d = obj.data || {};
+                if (Number(d.targetUid) !== targetEnemy) continue;
+                const attackerUid = Number(d.attackerUid);
+                if (!Number.isFinite(attackerUid)) continue;
+                const val = Number(d.value) || 0;
+                if (val <= 0) continue;
+                byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
+            }
+            let total = 0;
+            const items = [];
+            for (const [attackerUid, amount] of byAttacker.entries()) {
+                total += amount;
+                const name = userNames[String(attackerUid)] || `#${attackerUid}`;
+                items.push({ attackerUid, name, amount });
+            }
+            items.sort((a,b)=> b.amount - a.amount);
+            const enemyName = enemyNames[String(targetEnemy)] || `#${targetEnemy}`;
+            res.json({ code: 0, data: { enemyUid: targetEnemy, enemyName, total, items } });
+        } catch (e) {
+            logger.error('Failed to build historical NPC breakdown', e);
+            res.status(500).json({ code: 1, msg: 'Failed to get historical NPC breakdown' });
+        }
+    });
+
     // Get history summary for a specific timestamp
     router.get('/history/:timestamp/summary', async (req, res) => {
         const { timestamp } = req.params;

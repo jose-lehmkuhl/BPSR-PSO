@@ -490,7 +490,9 @@ function connectWebSocket() {
 function openTankingBreakdown(user) {
     if (!user || !breakdownModal) return;
     const uid = user.id;
-    fetch(`/api/tanking/${uid}`).then(r=>r.json()).then(resp=>{
+    const isHistorical = currentEncounter !== 'current';
+    const endpoint = isHistorical ? `/api/history/${currentEncounter}/tanking/${uid}` : `/api/tanking/${uid}`;
+    fetch(endpoint).then(r=>r.json()).then(resp=>{
         if (!(resp?.code === 0 && resp.data)) return;
         const data = resp.data;
         const total = data.total || 0;
@@ -523,7 +525,9 @@ function openTankingBreakdown(user) {
 
 function openNpcBreakdown(enemyUid, enemyName) {
     if (!breakdownModal) return;
-    fetch(`/api/npc/${enemyUid}`).then(r=>r.json()).then(resp=>{
+    const isHistorical = currentEncounter !== 'current';
+    const endpoint = isHistorical ? `/api/history/${currentEncounter}/npc/${enemyUid}` : `/api/npc/${enemyUid}`;
+    fetch(endpoint).then(r=>r.json()).then(resp=>{
         if (!(resp?.code === 0 && resp.data)) return;
         const data = resp.data;
         const total = data.total || 0;
