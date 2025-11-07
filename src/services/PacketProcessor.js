@@ -705,7 +705,6 @@ export class PacketProcessor {
         if (isZstdCompressed) {
             msgPayload = this._decompressPayload(msgPayload);
         }
-        try { userDataManager.addEvent('notify', { methodId }); } catch (_) {}
         switch (methodId) {
             case NotifyMethod.SyncNearEntities: {
                 this._processSyncNearEntities(msgPayload);
