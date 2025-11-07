@@ -495,7 +495,16 @@ function openTankingBreakdown(user) {
     if (!user || !breakdownModal) return;
     const uid = user.id;
     const isHistorical = currentEncounter !== 'current';
-    const endpoint = isHistorical ? `/api/history/${currentEncounter}/tanking/${uid}` : `/api/tanking/${uid}`;
+    // Support section-specific history (value format: ts#sec:idx)
+    let endpoint = `/api/tanking/${uid}`;
+    if (isHistorical) {
+        const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
+        if (m) {
+            endpoint = `/api/history/${m[1]}/section/${m[2]}/tanking/${uid}`;
+        } else {
+            endpoint = `/api/history/${currentEncounter}/tanking/${uid}`;
+        }
+    }
     fetch(endpoint).then(r=>r.json()).then(resp=>{
         if (!(resp?.code === 0 && resp.data)) return;
         const data = resp.data;
@@ -530,7 +539,15 @@ function openTankingBreakdown(user) {
 function openNpcBreakdown(enemyUid, enemyName) {
     if (!breakdownModal) return;
     const isHistorical = currentEncounter !== 'current';
-    const endpoint = isHistorical ? `/api/history/${currentEncounter}/npc/${enemyUid}` : `/api/npc/${enemyUid}`;
+    let endpoint = `/api/npc/${enemyUid}`;
+    if (isHistorical) {
+        const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
+        if (m) {
+            endpoint = `/api/history/${m[1]}/section/${m[2]}/npc/${enemyUid}`;
+        } else {
+            endpoint = `/api/history/${currentEncounter}/npc/${enemyUid}`;
+        }
+    }
     fetch(endpoint).then(r=>r.json()).then(resp=>{
         if (!(resp?.code === 0 && resp.data)) return;
         const data = resp.data;
@@ -582,8 +599,16 @@ function openBreakdown(user, modeOverride) {
     if (!user || !breakdownModal) return;
     // Build skills array from skill summaries on demand via API if historical; else from live snapshot composed server-side
     const uid = user.id;
-        const isHistorical = currentEncounter !== 'current';
-        const endpoint = isHistorical ? `http://${SERVER_URL}/api/history/${currentEncounter}/skill/${uid}` : `http://${SERVER_URL}/api/skill/${uid}`;
+    const isHistorical = currentEncounter !== 'current';
+    let endpoint = `/api/skill/${uid}`;
+    if (isHistorical) {
+        const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
+        if (m) {
+            endpoint = `/api/history/${m[1]}/section/${m[2]}/skill/${uid}`;
+        } else {
+            endpoint = `/api/history/${currentEncounter}/skill/${uid}`;
+        }
+    }
     fetch(endpoint).then(r=>r.json()).then((resp)=>{
         if (!(resp?.code === 0 && resp.data)) return;
         const data = resp.data;

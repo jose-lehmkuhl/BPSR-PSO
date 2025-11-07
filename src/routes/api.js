@@ -662,6 +662,224 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         }
     });
 
+    // Section-specific tanking breakdown
+    router.get('/history/:timestamp/section/:index/tanking/:uid', async (req, res) => {
+        try {
+            const { timestamp, index, uid } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const usersPath = path.join(logDir, 'allUserData.json');
+            let userNames = {};
+            try {
+                const rawU = await fsPromises.readFile(usersPath, 'utf8');
+                const objU = JSON.parse(rawU || '{}');
+                for (const [k, v] of Object.entries(objU || {})) {
+                    if (v && typeof v.name === 'string') userNames[k] = v.name;
+                }
+            } catch (_) {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\r?\n/);
+            // sections
+            const secs = [];
+            let currentStart = null, lastEnd = -1;
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (obj.type === 'battle_section_open') {
+                    const s = Number(obj?.data?.start || obj.ts || 0);
+                    if (s && currentStart == null) currentStart = s;
+                } else if (obj.type === 'battle_section_close') {
+                    const end = Number(obj?.data?.end || obj.ts || 0);
+                    if (currentStart != null && end >= currentStart && end !== lastEnd) {
+                        secs.push({ start: currentStart, end });
+                        lastEnd = end;
+                        currentStart = null;
+                    }
+                }
+            }
+            const idx = Number.parseInt(index, 10);
+            if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
+            const s = secs[idx];
+            const victim = Number.parseInt(uid, 10);
+            const byAttacker = new Map();
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || obj.type !== 'taken_damage') continue;
+                const ts = Number(obj.ts || 0);
+                if (ts < s.start || ts > s.end) continue;
+                const d = obj.data || {};
+                if (Number(d.targetUid) !== victim) continue;
+                const attackerUid = Number(d.attackerUid);
+                if (!Number.isFinite(attackerUid)) continue;
+                const val = Number(d.value) || 0;
+                if (val <= 0) continue;
+                byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
+            }
+            let total = 0;
+            const items = [];
+            for (const [attackerUid, amount] of byAttacker.entries()) {
+                total += amount;
+                const name = userNames[String(attackerUid)] || `#${attackerUid}`;
+                items.push({ attackerUid, name, amount });
+            }
+            items.sort((a,b)=> b.amount - a.amount);
+            res.json({ code: 0, data: { victimUid: victim, total, items } });
+        } catch (e) {
+            logger.error('Failed to build section tanking breakdown', e);
+            res.status(500).json({ code: 1, msg: 'Failed to get section tanking breakdown' });
+        }
+    });
+
+    // Section-specific NPC breakdown
+    router.get('/history/:timestamp/section/:index/npc/:enemyUid', async (req, res) => {
+        try {
+            const { timestamp, index, enemyUid } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const usersPath = path.join(logDir, 'allUserData.json');
+            const enemiesPath = path.join(logDir, 'enemies.json');
+            let userNames = {};
+            let enemyNames = {};
+            try {
+                const rawU = await fsPromises.readFile(usersPath, 'utf8');
+                const objU = JSON.parse(rawU || '{}');
+                for (const [k, v] of Object.entries(objU || {})) {
+                    if (v && typeof v.name === 'string') userNames[k] = v.name;
+                }
+            } catch (_) {}
+            try {
+                const rawE = await fsPromises.readFile(enemiesPath, 'utf8');
+                const objE = JSON.parse(rawE || '{}');
+                enemyNames = objE || {};
+            } catch (_) {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\r?\n/);
+            // sections
+            const secs = [];
+            let currentStart = null, lastEnd = -1;
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (obj.type === 'battle_section_open') {
+                    const s = Number(obj?.data?.start || obj.ts || 0);
+                    if (s && currentStart == null) currentStart = s;
+                } else if (obj.type === 'battle_section_close') {
+                    const end = Number(obj?.data?.end || obj.ts || 0);
+                    if (currentStart != null && end >= currentStart && end !== lastEnd) {
+                        secs.push({ start: currentStart, end });
+                        lastEnd = end;
+                        currentStart = null;
+                    }
+                }
+            }
+            const idx = Number.parseInt(index, 10);
+            if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
+            const s = secs[idx];
+            const targetEnemy = Number.parseInt(enemyUid, 10);
+            const byAttacker = new Map();
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || obj.type !== 'damage') continue;
+                const ts = Number(obj.ts || 0);
+                if (ts < s.start || ts > s.end) continue;
+                const d = obj.data || {};
+                if (Number(d.targetUid) !== targetEnemy) continue;
+                const attackerUid = Number(d.attackerUid);
+                if (!Number.isFinite(attackerUid)) continue;
+                const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                if (val <= 0) continue;
+                byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
+            }
+            let total = 0;
+            const items = [];
+            for (const [attackerUid, amount] of byAttacker.entries()) {
+                total += amount;
+                const name = userNames[String(attackerUid)] || `#${attackerUid}`;
+                items.push({ attackerUid, name, amount });
+            }
+            items.sort((a,b)=> b.amount - a.amount);
+            const enemyName = enemyNames[String(targetEnemy)] || `#${targetEnemy}`;
+            res.json({ code: 0, data: { enemyUid: targetEnemy, enemyName, total, items } });
+        } catch (e) {
+            logger.error('Failed to build section NPC breakdown', e);
+            res.status(500).json({ code: 1, msg: 'Failed to get section NPC breakdown' });
+        }
+    });
+
+    // Section-specific skill breakdown
+    router.get('/history/:timestamp/section/:index/skill/:uid', async (req, res) => {
+        try {
+            const { timestamp, index, uid } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const usersPath = path.join(logDir, 'allUserData.json');
+            let userName = `#${uid}`;
+            let profession = '';
+            try {
+                const rawU = await fsPromises.readFile(usersPath, 'utf8');
+                const objU = JSON.parse(rawU || '{}');
+                const me = objU?.[uid];
+                if (me) {
+                    if (typeof me.name === 'string') userName = me.name;
+                    if (typeof me.profession === 'string') profession = me.profession;
+                }
+            } catch (_) {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\r?\n/);
+            // sections
+            const secs = [];
+            let currentStart = null, lastEnd = -1;
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (obj.type === 'battle_section_open') {
+                    const s = Number(obj?.data?.start || obj.ts || 0);
+                    if (s && currentStart == null) currentStart = s;
+                } else if (obj.type === 'battle_section_close') {
+                    const end = Number(obj?.data?.end || obj.ts || 0);
+                    if (currentStart != null && end >= currentStart && end !== lastEnd) {
+                        secs.push({ start: currentStart, end });
+                        lastEnd = end;
+                        currentStart = null;
+                    }
+                }
+            }
+            const idx = Number.parseInt(index, 10);
+            if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
+            const s = secs[idx];
+            const me = Number.parseInt(uid, 10);
+            const skills = {};
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                const ts = Number(obj.ts || 0);
+                if (ts < s.start || ts > s.end) continue;
+                const d = obj.data || {};
+                const attacker = Number(d.attackerUid);
+                if (!Number.isFinite(attacker) || attacker !== me) continue;
+                const sid = d.skillId != null ? String(d.skillId) : undefined;
+                if (!sid) continue;
+                const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                const isCrit = !!d.crit;
+                if (!skills[sid]) skills[sid] = { totalDamage: 0, totalCount: 0, critCount: 0, type: (obj.type === 'heal' ? '治疗' : '伤害'), displayName: sid };
+                skills[sid].totalDamage += val > 0 ? val : 0;
+                skills[sid].totalCount += 1;
+                if (isCrit) skills[sid].critCount += 1;
+            }
+            // compute critRate
+            for (const sid of Object.keys(skills)) {
+                const sObj = skills[sid];
+                sObj.critRate = sObj.totalCount ? (sObj.critCount / sObj.totalCount) : 0;
+            }
+            res.json({ code: 0, data: { name: userName, profession, skills } });
+        } catch (e) {
+            logger.error('Failed to build section skill breakdown', e);
+            res.status(500).json({ code: 1, msg: 'Failed to get section skill breakdown' });
+        }
+    });
+
     // Get history skill data for a specific timestamp and user
     router.get('/history/:timestamp/skill/:uid', async (req, res) => {
         const { timestamp, uid } = req.params;
