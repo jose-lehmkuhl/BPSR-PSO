@@ -426,10 +426,15 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             const sections = [];
             let currentStart = null;
             let lastEnd = -1;
+            let lastActiveTs = -1; // last ts of damage or taken_damage
             for (const line of lines) {
                 if (!line) continue;
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
                 if (!obj || !obj.type) continue;
+                if (obj.type === 'damage' || obj.type === 'taken_damage') {
+                    const t = Number(obj.ts || 0);
+                    if (Number.isFinite(t) && t > lastActiveTs) lastActiveTs = t;
+                }
                 if (obj.type === 'battle_section_open') {
                     const s = Number(obj?.data?.start || obj.ts || 0);
                     if (s && currentStart == null) currentStart = s;
@@ -441,6 +446,11 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                         currentStart = null;
                     }
                 }
+            }
+            // include trailing open section closed at lastActiveTs
+            if (currentStart != null && lastActiveTs >= currentStart && lastActiveTs !== lastEnd) {
+                sections.push({ start: currentStart, end: lastActiveTs });
+                currentStart = null;
             }
             // guard: sort and drop invalid
             const norm = sections.filter(s => Number.isFinite(s.start) && Number.isFinite(s.end) && s.end >= s.start)
@@ -504,11 +514,15 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             const lines = raw.split(/\r?\n/);
             // reuse simple scan to build sections
             const secs = [];
-            let currentStart = null, lastEnd = -1;
+            let currentStart = null, lastEnd = -1, lastActiveTs = -1;
             for (const line of lines) {
                 if (!line) continue;
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
                 if (!obj || !obj.type) continue;
+                if (obj.type === 'damage' || obj.type === 'taken_damage') {
+                    const t = Number(obj.ts || 0);
+                    if (Number.isFinite(t) && t > lastActiveTs) lastActiveTs = t;
+                }
                 if (obj.type === 'battle_section_open') {
                     const s = Number(obj?.data?.start || obj.ts || 0);
                     if (s && currentStart == null) currentStart = s;
@@ -520,6 +534,10 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                         currentStart = null;
                     }
                 }
+            }
+            if (currentStart != null && lastActiveTs >= currentStart && lastActiveTs !== lastEnd) {
+                secs.push({ start: currentStart, end: lastActiveTs });
+                currentStart = null;
             }
             const idx = Number.parseInt(index, 10);
             if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
@@ -579,11 +597,15 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             const lines = raw.split(/\r?\n/);
             // Build sections
             const secs = [];
-            let currentStart = null, lastEnd = -1;
+            let currentStart = null, lastEnd = -1, lastActiveTs = -1;
             for (const line of lines) {
                 if (!line) continue;
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
                 if (!obj || !obj.type) continue;
+                if (obj.type === 'damage' || obj.type === 'taken_damage') {
+                    const t = Number(obj.ts || 0);
+                    if (Number.isFinite(t) && t > lastActiveTs) lastActiveTs = t;
+                }
                 if (obj.type === 'battle_section_open') {
                     const s = Number(obj?.data?.start || obj.ts || 0);
                     if (s && currentStart == null) currentStart = s;
@@ -595,6 +617,10 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                         currentStart = null;
                     }
                 }
+            }
+            if (currentStart != null && lastActiveTs >= currentStart && lastActiveTs !== lastEnd) {
+                secs.push({ start: currentStart, end: lastActiveTs });
+                currentStart = null;
             }
             const idx = Number.parseInt(index, 10);
             if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
@@ -681,10 +707,15 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             const lines = raw.split(/\r?\n/);
             // sections
             const secs = [];
-            let currentStart = null, lastEnd = -1;
+            let currentStart = null, lastEnd = -1, lastActiveTs = -1;
             for (const line of lines) {
                 if (!line) continue;
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || !obj.type) continue;
+                if (obj.type === 'damage' || obj.type === 'taken_damage') {
+                    const t = Number(obj.ts || 0);
+                    if (Number.isFinite(t) && t > lastActiveTs) lastActiveTs = t;
+                }
                 if (obj.type === 'battle_section_open') {
                     const s = Number(obj?.data?.start || obj.ts || 0);
                     if (s && currentStart == null) currentStart = s;
@@ -696,6 +727,10 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                         currentStart = null;
                     }
                 }
+            }
+            if (currentStart != null && lastActiveTs >= currentStart && lastActiveTs !== lastEnd) {
+                secs.push({ start: currentStart, end: lastActiveTs });
+                currentStart = null;
             }
             const idx = Number.parseInt(index, 10);
             if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
@@ -757,10 +792,15 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             const lines = raw.split(/\r?\n/);
             // sections
             const secs = [];
-            let currentStart = null, lastEnd = -1;
+            let currentStart = null, lastEnd = -1, lastActiveTs = -1;
             for (const line of lines) {
                 if (!line) continue;
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || !obj.type) continue;
+                if (obj.type === 'damage' || obj.type === 'taken_damage') {
+                    const t = Number(obj.ts || 0);
+                    if (Number.isFinite(t) && t > lastActiveTs) lastActiveTs = t;
+                }
                 if (obj.type === 'battle_section_open') {
                     const s = Number(obj?.data?.start || obj.ts || 0);
                     if (s && currentStart == null) currentStart = s;
@@ -772,6 +812,10 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                         currentStart = null;
                     }
                 }
+            }
+            if (currentStart != null && lastActiveTs >= currentStart && lastActiveTs !== lastEnd) {
+                secs.push({ start: currentStart, end: lastActiveTs });
+                currentStart = null;
             }
             const idx = Number.parseInt(index, 10);
             if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
@@ -830,10 +874,15 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             const lines = raw.split(/\r?\n/);
             // sections
             const secs = [];
-            let currentStart = null, lastEnd = -1;
+            let currentStart = null, lastEnd = -1, lastActiveTs = -1;
             for (const line of lines) {
                 if (!line) continue;
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || !obj.type) continue;
+                if (obj.type === 'damage' || obj.type === 'taken_damage') {
+                    const t = Number(obj.ts || 0);
+                    if (Number.isFinite(t) && t > lastActiveTs) lastActiveTs = t;
+                }
                 if (obj.type === 'battle_section_open') {
                     const s = Number(obj?.data?.start || obj.ts || 0);
                     if (s && currentStart == null) currentStart = s;
@@ -845,6 +894,10 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                         currentStart = null;
                     }
                 }
+            }
+            if (currentStart != null && lastActiveTs >= currentStart && lastActiveTs !== lastEnd) {
+                secs.push({ start: currentStart, end: lastActiveTs });
+                currentStart = null;
             }
             const idx = Number.parseInt(index, 10);
             if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
