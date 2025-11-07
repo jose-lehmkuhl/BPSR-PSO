@@ -226,6 +226,8 @@ function renderDataList(users) {
             mainBarFill = `<div class="tanking-bar-fill" style="width: ${tankPercent}%; background-color: rgba(255,0,0,0.5);"></div>`;
         }
 
+        // Capture current mode on the DOM node to use at click time (avoids race with mode switch)
+        item.dataset.mode = rankingMode;
         item.innerHTML = `
             <div class="main-bar">
                 ${mainBarFill}
@@ -249,7 +251,9 @@ function renderDataList(users) {
             if (window?.electronAPI?.openBreakdown) {
                 window.electronAPI.openBreakdown(payload);
             } else {
-                openBreakdown(user);
+                // Use mode captured at render time to decide DPS vs HPS breakdown
+                const mode = item.dataset.mode || rankingMode;
+                openBreakdown(user, mode);
             }
         });
         columnsContainer.appendChild(item);
@@ -574,7 +578,7 @@ function initialize() {
     setInterval(checkConnection, WEBSOCKET_RECONNECT_INTERVAL);
 }
 
-function openBreakdown(user) {
+function openBreakdown(user, modeOverride) {
     if (!user || !breakdownModal) return;
     // Build skills array from skill summaries on demand via API if historical; else from live snapshot composed server-side
     const uid = user.id;
@@ -584,7 +588,8 @@ function openBreakdown(user) {
         if (!(resp?.code === 0 && resp.data)) return;
         const data = resp.data;
         const skills = data.skills || {};
-        const isHpsMode = (rankingMode === 'hps');
+        const currentMode = modeOverride || rankingMode;
+        const isHpsMode = (currentMode === 'hps');
         const skillEntries = Object.entries(skills)
             .filter(([sid, s]) => {
                 const t = (s?.type || '').toString();
