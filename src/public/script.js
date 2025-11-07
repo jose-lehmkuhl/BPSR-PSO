@@ -617,12 +617,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const clampEnd = Math.min(now, combatClockFromServer.last + (combatClockFromServer.idle || 5000));
             showMs = Math.max(0, clampEnd - combatClockFromServer.start);
         } else {
-            const sinceLast = now - lastCombatTs;
-            if (sinceLast < oocMs) {
-                showMs = Math.max(0, now - fightStartTs);
-            } else {
-                showMs = Math.max(0, lastCombatTs - fightStartTs);
-            }
+            // No combat info yet → show 00:00 (do not use scene timers)
+            showMs = 0;
         }
         const mm = String(Math.floor(showMs / 60000)).padStart(2, '0');
         const ss = String(Math.floor((showMs % 60000) / 1000)).padStart(2, '0');
