@@ -104,6 +104,27 @@ function formatNumber(num) {
     return Math.round(num).toString();
 }
 
+function renderTotalBar(users, encSec) {
+    const container = document.getElementById('totalBarContainer');
+    if (!container) return;
+    // For NPC/tanking views, hide the bar
+    if (rankingMode === 'npc') { container.classList.add('hidden'); container.innerHTML = ''; return; }
+    const totalDamage = users.reduce((sum, u)=> sum + ((u.total_damage?.total)||0), 0);
+    const dps = (encSec && encSec>0) ? (totalDamage / encSec) : 0;
+    const labelLeft = 'All';
+    const labelRight = `${formatNumber(totalDamage)} (${formatNumber(dps)} DPS)`;
+    container.classList.remove('hidden');
+    container.innerHTML = `
+        <div class="total-bar">
+            <div class="total-bar-fill"></div>
+            <div class="total-bar-content">
+                <span>${labelLeft}</span>
+                <span>${labelRight}</span>
+            </div>
+        </div>
+    `;
+}
+
 function getCurrentEncounterSeconds() {
     if (currentEncounter !== 'current') return null;
     if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer >= 0) {
@@ -272,6 +293,8 @@ function updateAll() {
     } else {
         const usersArray = Object.values(allUsers).filter((user) => (user.total_damage?.total||0) > 0 || (user.total_healing?.total||0) > 0 || (user.taken_damage||0)>0);
         renderDataList(usersArray);
+        const encSec = getCurrentEncounterSeconds();
+        renderTotalBar(usersArray, encSec);
     }
 }
 
