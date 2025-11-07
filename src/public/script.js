@@ -112,7 +112,8 @@ function getCurrentEncounterSeconds() {
     // Fallback to server combatClock
     if (combatClockFromServer && combatClockFromServer.start && combatClockFromServer.last) {
         const now = Date.now();
-        const clampEnd = Math.min(now, combatClockFromServer.last + (combatClockFromServer.idle || 5000));
+        // Exclude idle buffer: clamp to lastDamageTs
+        const clampEnd = Math.min(now, combatClockFromServer.last);
         const ms = Math.max(0, clampEnd - combatClockFromServer.start);
         return Math.floor(ms / 1000);
     }
@@ -614,7 +615,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer > 0) {
             showMs = combatTimeMsFromServer;
         } else if (combatClockFromServer && combatClockFromServer.start && combatClockFromServer.last) {
-            const clampEnd = Math.min(now, combatClockFromServer.last + (combatClockFromServer.idle || 5000));
+            // Exclude idle buffer: clamp to lastDamageTs
+            const clampEnd = Math.min(now, combatClockFromServer.last);
             showMs = Math.max(0, clampEnd - combatClockFromServer.start);
         } else {
             // No combat info yet → show 00:00 (do not use scene timers)

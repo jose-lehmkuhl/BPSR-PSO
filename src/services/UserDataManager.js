@@ -76,7 +76,8 @@ class UserDataManager {
             if (end > start) total += (end - start);
         }
         if (this.currentBattleStartTs != null) {
-            const clampEnd = Math.min(nowTs, (this.lastDamageTs > 0 ? (this.lastDamageTs + this.battleIdleMs) : nowTs));
+            // Do not include idle buffer in combat time; clamp to lastDamageTs
+            const clampEnd = (this.lastDamageTs > 0 ? this.lastDamageTs : nowTs);
             if (clampEnd > this.currentBattleStartTs) total += (clampEnd - this.currentBattleStartTs);
         }
         return total;
@@ -245,7 +246,8 @@ class UserDataManager {
         // Close an open battle section if we've been idle for >= battleIdleMs
         if (this.currentBattleStartTs != null && this.lastDamageTs > 0) {
             if (nowTs - this.lastDamageTs >= this.battleIdleMs) {
-                const endTs = Math.min(nowTs, this.lastDamageTs + this.battleIdleMs);
+                // Close section at lastDamageTs (exclude idle)
+                const endTs = this.lastDamageTs;
                 const section = { start: this.currentBattleStartTs, end: endTs };
                 this.battleSections.push(section);
                 await this._writeEvent(eventsFile, logDir, 'battle_section_close', { start: section.start, end: section.end, durationMs: section.end - section.start });
@@ -288,7 +290,8 @@ class UserDataManager {
         // Close if idle exceeded
         if (this.currentBattleStartTs != null && this.lastDamageTs > 0) {
             if (nowTs - this.lastDamageTs >= this.battleIdleMs) {
-                const endTs = Math.min(nowTs, this.lastDamageTs + this.battleIdleMs);
+                // Close section at lastDamageTs (exclude idle)
+                const endTs = this.lastDamageTs;
                 const section = { start: this.currentBattleStartTs, end: endTs };
                 this.battleSections.push(section);
                 await this._writeEvent(eventsFile, logDir, 'battle_section_close', { start: section.start, end: section.end, durationMs: section.end - section.start });
@@ -513,7 +516,8 @@ class UserDataManager {
             // Finalize any open battle section before rollover
             battleSectionsSnapshot = Array.isArray(this.battleSections) ? this.battleSections.slice() : [];
             if (this.currentBattleStartTs != null) {
-                const endTs = this.lastDamageTs > 0 ? (this.lastDamageTs + this.battleIdleMs) : Date.now();
+                // Finalize at lastDamageTs (exclude idle buffer)
+                const endTs = this.lastDamageTs > 0 ? this.lastDamageTs : Date.now();
                 const section = { start: this.currentBattleStartTs, end: endTs };
                 battleSectionsSnapshot.push(section);
             }
