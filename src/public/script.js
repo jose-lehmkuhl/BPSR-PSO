@@ -820,12 +820,35 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else {
                             encounterSelect.appendChild(opt);
                         }
+                        // Also insert section entries for this scene
+                        fetch(`/api/history/${ts}/analysis`).then(r=>r.json()).then(analysis=>{
+                            if (!(analysis?.code === 0 && Array.isArray(analysis.data?.sections))) return;
+                            const sceneName = analysis.data.sceneName || head || '';
+                            const secs = analysis.data.sections;
+                            // sections are in chronological order; insert below scene
+                            for (let i = 0; i < secs.length; i++) {
+                                const s = secs[i];
+                                const val = `${ts}#sec:${s.index}`;
+                                if (existing.has(val) || encounterSelect.querySelector(`option[value="${val}"]`)) continue;
+                                const d = s.durationMs || 0;
+                                const mm = String(Math.floor(d/60000)).padStart(2,'0');
+                                const ss = String(Math.floor((d%60000)/1000)).padStart(2,'0');
+                                const secLabel = `Sec ${s.index+1} — ${s.topEnemyName || 'Section'} [${mm}:${ss}] — Scene: ${sceneName}`;
+                                const secOpt = document.createElement('option');
+                                secOpt.value = val; secOpt.textContent = secLabel;
+                                if (opt.nextSibling) {
+                                    encounterSelect.insertBefore(secOpt, opt.nextSibling);
+                                } else {
+                                    encounterSelect.appendChild(secOpt);
+                                }
+                            }
+                        }).catch(()=>{});
                     }).catch(()=>{});
                 }
                 // Update labels for existing options (including the most recent one that just finalized)
                 for (const opt of Array.from(encounterSelect.options)) {
                     const ts = opt.value;
-                    if (!ts || ts === 'current') continue;
+                    if (!ts || ts === 'current' || ts.includes('#sec:')) continue;
                     fetch(`/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
                         if (!(meta?.code === 0 && meta.data)) return;
                         let labelText = meta.data.label;
@@ -840,6 +863,32 @@ document.addEventListener('DOMContentLoaded', () => {
                         const head = (labelText || '').split('(')[0].trim();
                         if (!head || head === 'Encounter') return; // don't replace with placeholder
                         if (opt.textContent !== labelText) opt.textContent = labelText;
+                        // refresh section entries for this scene
+                        fetch(`/api/history/${ts}/analysis`).then(r=>r.json()).then(analysis=>{
+                            if (!(analysis?.code === 0 && Array.isArray(analysis.data?.sections))) return;
+                            const sceneName = analysis.data.sceneName || head || '';
+                            const secs = analysis.data.sections;
+                            for (let i = 0; i < secs.length; i++) {
+                                const s = secs[i];
+                                const val = `${ts}#sec:${s.index}`;
+                                const d = s.durationMs || 0;
+                                const mm = String(Math.floor(d/60000)).padStart(2,'0');
+                                const ss = String(Math.floor((d%60000)/1000)).padStart(2,'0');
+                                const secLabel = `Sec ${s.index+1} — ${s.topEnemyName || 'Section'} [${mm}:${ss}] — Scene: ${sceneName}`;
+                                let secOpt = encounterSelect.querySelector(`option[value="${val}"]`);
+                                if (!secOpt) {
+                                    secOpt = document.createElement('option');
+                                    secOpt.value = val;
+                                    // insert after scene option
+                                    if (opt.nextSibling) {
+                                        encounterSelect.insertBefore(secOpt, opt.nextSibling);
+                                    } else {
+                                        encounterSelect.appendChild(secOpt);
+                                    }
+                                }
+                                if (secOpt.textContent !== secLabel) secOpt.textContent = secLabel;
+                            }
+                        }).catch(()=>{});
                     }).catch(()=>{});
                 }
             }).catch(()=>{});
@@ -864,29 +913,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             try {
-                // Load encounter meta to get duration seconds for historical DPS/HPS
-                try {
-                    const metaRes = await fetch(`/api/history/${currentEncounter}/meta`);
-                    const metaJs = await metaRes.json();
-                    if (metaJs?.code === 0 && metaJs.data) {
-                        const durMs = Number(metaJs.data.durationMs || 0);
-                        historicalEncounterSeconds = Math.max(1, Math.floor(durMs / 1000));
-                    } else {
-                        historicalEncounterSeconds = null;
+                // Support scene or section selection
+                const secMatch = currentEncounter.match(/^([0-9]+)#sec:(\\d+)$/);
+                if (secMatch) {
+                    const ts = secMatch[1];
+                    const idx = secMatch[2];
+                    // meta
+                    try {
+                        const mres = await fetch(`/api/history/${ts}/section/${idx}/meta`);
+                        const mjs = await mres.json();
+                        if (mjs?.code === 0 && mjs.data) {
+                            const durMs = Number(mjs.data.durationMs || 0);
+                            historicalEncounterSeconds = Math.max(1, Math.floor(durMs / 1000));
+                        } else {
+                            historicalEncounterSeconds = null;
+                        }
+                    } catch (_) { historicalEncounterSeconds = null; }
+                    // data
+                    const res = await fetch(`/api/history/${ts}/section/${idx}/data`);
+                    const json = await res.json();
+                    if (json?.code === 0) {
+                        if (json.user) {
+                            historicalUsers = Object.entries(json.user).map(([id, u])=> ({ id, ...u }))
+                                .filter((u)=> (u.total_dps>0 || u.total_hps>0 || (u.taken_damage||0)>0));
+                        } else { historicalUsers = []; }
+                        if (json.enemies) {
+                            historicalEnemies = Object.entries(json.enemies).map(([id, e])=> ({ id, ...e }));
+                        } else { historicalEnemies = []; }
+                        updateAll();
+                        wasOnCurrentEncounter = false;
                     }
-                } catch (_) { historicalEncounterSeconds = null; }
-                const res = await fetch(`/api/history/${currentEncounter}/data`);
-                const json = await res.json();
-                if (json?.code === 0) {
-                    if (json.user) {
-                        historicalUsers = Object.entries(json.user).map(([id, u])=> ({ id, ...u }))
-                            .filter((u)=> (u.total_dps>0 || u.total_hps>0 || (u.taken_damage||0)>0));
-                    } else { historicalUsers = []; }
-                    if (json.enemies) {
-                        historicalEnemies = Object.entries(json.enemies).map(([id, e])=> ({ id, ...e }));
-                    } else { historicalEnemies = []; }
-                    updateAll();
-                    wasOnCurrentEncounter = false;
+                } else {
+                    // Load encounter meta to get duration seconds for historical DPS/HPS
+                    try {
+                        const metaRes = await fetch(`/api/history/${currentEncounter}/meta`);
+                        const metaJs = await metaRes.json();
+                        if (metaJs?.code === 0 && metaJs.data) {
+                            const durMs = Number(metaJs.data.durationMs || 0);
+                            historicalEncounterSeconds = Math.max(1, Math.floor(durMs / 1000));
+                        } else {
+                            historicalEncounterSeconds = null;
+                        }
+                    } catch (_) { historicalEncounterSeconds = null; }
+                    const res = await fetch(`/api/history/${currentEncounter}/data`);
+                    const json = await res.json();
+                    if (json?.code === 0) {
+                        if (json.user) {
+                            historicalUsers = Object.entries(json.user).map(([id, u])=> ({ id, ...u }))
+                                .filter((u)=> (u.total_dps>0 || u.total_hps>0 || (u.taken_damage||0)>0));
+                        } else { historicalUsers = []; }
+                        if (json.enemies) {
+                            historicalEnemies = Object.entries(json.enemies).map(([id, e])=> ({ id, ...e }));
+                        } else { historicalEnemies = []; }
+                        updateAll();
+                        wasOnCurrentEncounter = false;
+                    }
                 }
             } catch {}
         });

@@ -408,6 +408,260 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         }
     });
 
+    // Analyze sections and produce labels for a scene
+    router.get('/history/:timestamp/analysis', async (req, res) => {
+        try {
+            const { timestamp } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const enemiesPath = path.join(logDir, 'enemies.json');
+            let enemyNames = {};
+            try {
+                const rawE = await fsPromises.readFile(enemiesPath, 'utf8');
+                enemyNames = JSON.parse(rawE || '{}') || {};
+            } catch {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\r?\n/);
+            // collect sections
+            const sections = [];
+            let currentStart = null;
+            let lastEnd = -1;
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || !obj.type) continue;
+                if (obj.type === 'battle_section_open') {
+                    const s = Number(obj?.data?.start || obj.ts || 0);
+                    if (s && currentStart == null) currentStart = s;
+                } else if (obj.type === 'battle_section_close') {
+                    const end = Number(obj?.data?.end || obj.ts || 0);
+                    if (currentStart != null && end >= currentStart && end !== lastEnd) {
+                        sections.push({ start: currentStart, end });
+                        lastEnd = end;
+                        currentStart = null;
+                    }
+                }
+            }
+            // guard: sort and drop invalid
+            const norm = sections.filter(s => Number.isFinite(s.start) && Number.isFinite(s.end) && s.end >= s.start)
+                .sort((a,b)=> a.start - b.start);
+            // compute per-section top enemy
+            const perSection = norm.map((s, idx) => ({ index: idx, ...s, durationMs: (s.end - s.start), topEnemyId: null, topEnemyName: '', totalsByEnemy: {} }));
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || obj.type !== 'damage') continue;
+                const ts = Number(obj.ts || 0);
+                const d = obj.data || {};
+                const target = Number(d.targetUid);
+                if (!Number.isFinite(ts) || !Number.isFinite(target)) continue;
+                const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                if (val <= 0) continue;
+                // find section
+                for (const sec of perSection) {
+                    if (ts >= sec.start && ts <= sec.end) {
+                        sec.totalsByEnemy[target] = (sec.totalsByEnemy[target] || 0) + val;
+                        break;
+                    }
+                }
+            }
+            for (const sec of perSection) {
+                let bestId = null, bestVal = -1;
+                for (const [eidStr, total] of Object.entries(sec.totalsByEnemy)) {
+                    const eid = Number(eidStr);
+                    if (total > bestVal) { bestVal = total; bestId = eid; }
+                }
+                sec.topEnemyId = bestId;
+                sec.topEnemyName = (bestId != null) ? (enemyNames[String(bestId)] || `#${bestId}`) : '';
+            }
+            // scene label: longest section's top enemy
+            let sceneName = '';
+            if (perSection.length > 0) {
+                let longest = perSection[0];
+                for (const s of perSection) { if ((s.durationMs || 0) > (longest.durationMs || 0)) longest = s; }
+                sceneName = longest.topEnemyName || '';
+            }
+            res.json({ code: 0, data: { sections: perSection, sceneName } });
+        } catch (e) {
+            logger.error('Failed to analyze sections', e);
+            res.status(500).json({ code: 1, msg: 'Failed to analyze sections' });
+        }
+    });
+
+    // Section-specific meta
+    router.get('/history/:timestamp/section/:index/meta', async (req, res) => {
+        try {
+            const { timestamp, index } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const enemiesPath = path.join(logDir, 'enemies.json');
+            let enemyNames = {};
+            try {
+                const rawE = await fsPromises.readFile(enemiesPath, 'utf8');
+                enemyNames = JSON.parse(rawE || '{}') || {};
+            } catch {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\r?\n/);
+            // reuse simple scan to build sections
+            const secs = [];
+            let currentStart = null, lastEnd = -1;
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || !obj.type) continue;
+                if (obj.type === 'battle_section_open') {
+                    const s = Number(obj?.data?.start || obj.ts || 0);
+                    if (s && currentStart == null) currentStart = s;
+                } else if (obj.type === 'battle_section_close') {
+                    const end = Number(obj?.data?.end || obj.ts || 0);
+                    if (currentStart != null && end >= currentStart && end !== lastEnd) {
+                        secs.push({ start: currentStart, end });
+                        lastEnd = end;
+                        currentStart = null;
+                    }
+                }
+            }
+            const idx = Number.parseInt(index, 10);
+            if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
+            const s = secs[idx];
+            // compute top enemy within this section
+            const totals = {};
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || obj.type !== 'damage') continue;
+                const ts = Number(obj.ts || 0);
+                const d = obj.data || {};
+                const target = Number(d.targetUid);
+                if (!Number.isFinite(ts) || !Number.isFinite(target)) continue;
+                if (ts < s.start || ts > s.end) continue;
+                const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                if (val <= 0) continue;
+                totals[target] = (totals[target] || 0) + val;
+            }
+            let bestId = null, bestVal = -1;
+            for (const [eidStr, total] of Object.entries(totals)) {
+                const eid = Number(eidStr);
+                if (total > bestVal) { bestVal = total; bestId = eid; }
+            }
+            const durationMs = Math.max(0, s.end - s.start);
+            const label = `${enemyNames[String(bestId)] || (bestId != null ? `#${bestId}` : 'Section')} [${String(Math.floor(durationMs/60000)).padStart(2,'0')}:${String(Math.floor((durationMs%60000)/1000)).padStart(2,'0')}]`;
+            res.json({ code: 0, data: { index: idx, start: s.start, end: s.end, durationMs, topEnemyId: bestId, topEnemyName: enemyNames[String(bestId)] || (bestId != null ? `#${bestId}` : ''), label } });
+        } catch (e) {
+            logger.error('Failed to build section meta', e);
+            res.status(500).json({ code: 1, msg: 'Failed to build section meta' });
+        }
+    });
+
+    // Section-specific aggregated data (users/enemies)
+    router.get('/history/:timestamp/section/:index/data', async (req, res) => {
+        try {
+            const { timestamp, index } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const usersPath = path.join(logDir, 'allUserData.json');
+            const enemiesPath = path.join(logDir, 'enemies.json');
+            let userNames = {};
+            let enemyNames = {};
+            try {
+                const rawU = await fsPromises.readFile(usersPath, 'utf8');
+                const objU = JSON.parse(rawU || '{}');
+                for (const [k, v] of Object.entries(objU || {})) {
+                    if (v && typeof v.name === 'string') userNames[k] = v.name;
+                }
+            } catch (_) {}
+            try {
+                const rawE = await fsPromises.readFile(enemiesPath, 'utf8');
+                const objE = JSON.parse(rawE || '{}');
+                enemyNames = objE || {};
+            } catch (_) {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\r?\n/);
+            // Build sections
+            const secs = [];
+            let currentStart = null, lastEnd = -1;
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || !obj.type) continue;
+                if (obj.type === 'battle_section_open') {
+                    const s = Number(obj?.data?.start || obj.ts || 0);
+                    if (s && currentStart == null) currentStart = s;
+                } else if (obj.type === 'battle_section_close') {
+                    const end = Number(obj?.data?.end || obj.ts || 0);
+                    if (currentStart != null && end >= currentStart && end !== lastEnd) {
+                        secs.push({ start: currentStart, end });
+                        lastEnd = end;
+                        currentStart = null;
+                    }
+                }
+            }
+            const idx = Number.parseInt(index, 10);
+            if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
+            const s = secs[idx];
+            const start = s.start, end = s.end;
+            // Aggregate
+            const userAgg = new Map(); // uid -> { name, total_damage:{total}, total_healing:{total}, total_dps, total_hps, taken_damage }
+            const enemiesAgg = new Map(); // enemyUid -> taken_total
+            const durationSec = Math.max(1, Math.floor((end - start) / 1000));
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                const ts = Number(obj?.ts || 0);
+                if (!Number.isFinite(ts) || ts < start || ts > end) continue;
+                if (obj.type === 'damage') {
+                    const d = obj.data || {};
+                    const attacker = Number(d.attackerUid);
+                    const target = Number(d.targetUid);
+                    const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                    if (Number.isFinite(attacker) && val > 0) {
+                        const u = userAgg.get(attacker) || { name: userNames[String(attacker)] || `#${attacker}`, total_damage:{ total:0 }, total_healing:{ total:0 }, total_dps:0, total_hps:0, taken_damage:0 };
+                        u.total_damage.total += val;
+                        userAgg.set(attacker, u);
+                    }
+                    if (Number.isFinite(target) && val > 0) {
+                        enemiesAgg.set(target, (enemiesAgg.get(target) || 0) + val);
+                    }
+                } else if (obj.type === 'heal') {
+                    const d = obj.data || {};
+                    const attacker = Number(d.attackerUid);
+                    const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                    if (Number.isFinite(attacker) && val > 0) {
+                        const u = userAgg.get(attacker) || { name: userNames[String(attacker)] || `#${attacker}`, total_damage:{ total:0 }, total_healing:{ total:0 }, total_dps:0, total_hps:0, taken_damage:0 };
+                        u.total_healing.total += val;
+                        userAgg.set(attacker, u);
+                    }
+                } else if (obj.type === 'taken_damage') {
+                    const d = obj.data || {};
+                    const victim = Number(d.targetUid);
+                    const val = Number(d.value) || 0;
+                    if (Number.isFinite(victim) && val > 0) {
+                        const u = userAgg.get(victim) || { name: userNames[String(victim)] || `#${victim}`, total_damage:{ total:0 }, total_healing:{ total:0 }, total_dps:0, total_hps:0, taken_damage:0 };
+                        u.taken_damage += val;
+                        userAgg.set(victim, u);
+                    }
+                }
+            }
+            // compute rates
+            for (const [uid, u] of userAgg.entries()) {
+                u.total_dps = (u.total_damage.total || 0) / durationSec;
+                u.total_hps = (u.total_healing.total || 0) / durationSec;
+            }
+            const userOut = {};
+            for (const [uid, u] of userAgg.entries()) {
+                userOut[String(uid)] = { name: u.name, total_damage: u.total_damage, total_healing: u.total_healing, total_dps: u.total_dps, total_hps: u.total_hps, taken_damage: u.taken_damage };
+            }
+            const enemiesOut = {};
+            for (const [eid, total] of enemiesAgg.entries()) {
+                enemiesOut[String(eid)] = { id: eid, name: enemyNames[String(eid)] || `#${eid}`, taken_total: total };
+            }
+            res.json({ code: 0, user: userOut, enemies: enemiesOut, durationSec: durationSec });
+        } catch (e) {
+            logger.error('Failed to build section data', e);
+            res.status(500).json({ code: 1, msg: 'Failed to build section data' });
+        }
+    });
+
     // Get history skill data for a specific timestamp and user
     router.get('/history/:timestamp/skill/:uid', async (req, res) => {
         const { timestamp, uid } = req.params;
