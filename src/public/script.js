@@ -989,7 +989,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else { historicalUsers = []; }
                         if (json.enemies) {
                             historicalEnemies = Object.entries(json.enemies).map(([id, e])=> ({ id, ...e }));
-                        } else { historicalEnemies = []; }
+                        } else {
+                            // Fallback: aggregate enemies from events if not present
+                            try {
+                                const er = await fetch(`/api/history/${currentEncounter}/enemies-agg`);
+                                const ejs = await er.json();
+                                if (ejs?.code === 0 && ejs.data) {
+                                    historicalEnemies = Object.entries(ejs.data).map(([id, e])=> ({ id, ...e }));
+                                } else {
+                                    historicalEnemies = [];
+                                }
+                            } catch { historicalEnemies = []; }
+                        }
                         updateAll();
                         wasOnCurrentEncounter = false;
                     }

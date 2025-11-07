@@ -173,12 +173,14 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             for (const line of lines) {
                 if (!line) continue;
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
-                if (!obj || obj.type !== 'taken_damage') continue;
+                if (!obj || (obj.type !== 'damage' && obj.type !== 'taken_damage')) continue;
                 const d = obj.data || {};
                 if (Number(d.targetUid) !== victim) continue;
                 const attackerUid = Number(d.attackerUid);
                 if (!Number.isFinite(attackerUid)) continue;
-                const val = Number(d.value) || 0;
+                const val = (obj.type === 'damage')
+                    ? ((Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0)
+                    : (Number(d.value) || 0);
                 if (val <= 0) continue;
                 byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
             }
@@ -248,6 +250,42 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         } catch (e) {
             logger.error('Failed to build historical NPC breakdown', e);
             res.status(500).json({ code: 1, msg: 'Failed to get historical NPC breakdown' });
+        }
+    });
+
+    // Scene-level enemies aggregate (total taken per enemy across the scene)
+    router.get('/history/:timestamp/enemies-agg', async (req, res) => {
+        try {
+            const { timestamp } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const enemiesPath = path.join(logDir, 'enemies.json');
+            let enemyNames = {};
+            try {
+                const rawE = await fsPromises.readFile(enemiesPath, 'utf8');
+                enemyNames = JSON.parse(rawE || '{}') || {};
+            } catch (_) {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\r?\n/);
+            const enemiesAgg = new Map();
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || obj.type !== 'damage') continue;
+                const d = obj.data || {};
+                const target = Number(d.targetUid);
+                const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                if (!Number.isFinite(target) || val <= 0) continue;
+                enemiesAgg.set(target, (enemiesAgg.get(target) || 0) + val);
+            }
+            const out = {};
+            for (const [eid, total] of enemiesAgg.entries()) {
+                out[String(eid)] = { id: eid, name: enemyNames[String(eid)] || `#${eid}`, taken_total: total };
+            }
+            res.json({ code: 0, data: out });
+        } catch (e) {
+            logger.error('Failed to aggregate enemies for scene', e);
+            res.status(500).json({ code: 1, msg: 'Failed to aggregate enemies' });
         }
     });
 
@@ -433,7 +471,11 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 if (!obj || !obj.type) continue;
                 if (obj.type === 'damage' || obj.type === 'taken_damage') {
                     const t = Number(obj.ts || 0);
-                    if (Number.isFinite(t) && t > lastActiveTs) lastActiveTs = t;
+                    if (Number.isFinite(t)) {
+                        if (lastActiveTs < t) lastActiveTs = t;
+                        // Infer open if missing
+                        if (currentStart == null) currentStart = t;
+                    }
                 }
                 if (obj.type === 'battle_section_open') {
                     const s = Number(obj?.data?.start || obj.ts || 0);
@@ -521,7 +563,10 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 if (!obj || !obj.type) continue;
                 if (obj.type === 'damage' || obj.type === 'taken_damage') {
                     const t = Number(obj.ts || 0);
-                    if (Number.isFinite(t) && t > lastActiveTs) lastActiveTs = t;
+                    if (Number.isFinite(t)) {
+                        if (lastActiveTs < t) lastActiveTs = t;
+                        if (currentStart == null) currentStart = t;
+                    }
                 }
                 if (obj.type === 'battle_section_open') {
                     const s = Number(obj?.data?.start || obj.ts || 0);
@@ -604,7 +649,10 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 if (!obj || !obj.type) continue;
                 if (obj.type === 'damage' || obj.type === 'taken_damage') {
                     const t = Number(obj.ts || 0);
-                    if (Number.isFinite(t) && t > lastActiveTs) lastActiveTs = t;
+                    if (Number.isFinite(t)) {
+                        if (lastActiveTs < t) lastActiveTs = t;
+                        if (currentStart == null) currentStart = t;
+                    }
                 }
                 if (obj.type === 'battle_section_open') {
                     const s = Number(obj?.data?.start || obj.ts || 0);
@@ -740,14 +788,17 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             for (const line of lines) {
                 if (!line) continue;
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
-                if (!obj || obj.type !== 'taken_damage') continue;
+                if (!obj || (obj.type !== 'taken_damage' && obj.type !== 'damage')) continue;
                 const ts = Number(obj.ts || 0);
                 if (ts < s.start || ts > s.end) continue;
                 const d = obj.data || {};
+                // Prefer damage events with explicit attacker and target; fallback to taken_damage value when present
                 if (Number(d.targetUid) !== victim) continue;
                 const attackerUid = Number(d.attackerUid);
                 if (!Number.isFinite(attackerUid)) continue;
-                const val = Number(d.value) || 0;
+                const val = (obj.type === 'damage')
+                    ? ((Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0)
+                    : (Number(d.value) || 0);
                 if (val <= 0) continue;
                 byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
             }
