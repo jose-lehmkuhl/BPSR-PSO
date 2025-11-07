@@ -120,6 +120,30 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         res.json({ code: 0, data: skillData });
     });
 
+    // Get tanking breakdown (who hit this player and how much)
+    router.get('/tanking/:uid', (req, res) => {
+        try {
+            const uid = parseInt(req.params.uid);
+            const data = userDataManager.getTankingBreakdown(uid);
+            res.json({ code: 0, data });
+        } catch (e) {
+            logger.error('Failed to get tanking breakdown', e);
+            res.status(500).json({ code: 1, msg: 'Failed to get tanking breakdown' });
+        }
+    });
+
+    // Get NPC breakdown (per enemy, how much each player dealt)
+    router.get('/npc/:enemyUid', (req, res) => {
+        try {
+            const enemyUid = parseInt(req.params.enemyUid);
+            const data = userDataManager.getNpcBreakdown(enemyUid);
+            res.json({ code: 0, data });
+        } catch (e) {
+            logger.error('Failed to get NPC breakdown', e);
+            res.status(500).json({ code: 1, msg: 'Failed to get NPC breakdown' });
+        }
+    });
+
     // Get history summary for a specific timestamp
     router.get('/history/:timestamp/summary', async (req, res) => {
         const { timestamp } = req.params;

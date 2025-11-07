@@ -240,7 +240,11 @@ function renderDataList(users) {
         `;
         // Attach breakdown click for DPS/HPS rows (anywhere on the item)
         item.addEventListener('click', () => {
-            if (rankingMode === 'tanking' || rankingMode === 'npc') return;
+            if (rankingMode === 'npc') return;
+            if (rankingMode === 'tanking') {
+                openTankingBreakdown(user);
+                return;
+            }
             const payload = { uid: user.id, timestamp: currentEncounter };
             if (window?.electronAPI?.openBreakdown) {
                 window.electronAPI.openBreakdown(payload);
@@ -274,6 +278,10 @@ function renderNpcTankingList(enemies) {
                 </div>
             </div>
         `;
+        // Open NPC breakdown (who hit this enemy and how much)
+        item.addEventListener('click', () => {
+            openNpcBreakdown(e.id, displayName);
+        });
         columnsContainer.appendChild(item);
     });
 }
@@ -479,6 +487,70 @@ function connectWebSocket() {
     });
 }
 
+function openTankingBreakdown(user) {
+    if (!user || !breakdownModal) return;
+    const uid = user.id;
+    fetch(`/api/tanking/${uid}`).then(r=>r.json()).then(resp=>{
+        if (!(resp?.code === 0 && resp.data)) return;
+        const data = resp.data;
+        const total = data.total || 0;
+        const items = Array.isArray(data.items) ? data.items : [];
+        const rows = items.map(it=> ({ name: it.name || ('#'+it.attackerUid), total: it.amount||0, pct: total? ((it.amount||0)/total*100):0 })).sort((a,b)=> b.total-a.total);
+        const encSec = getCurrentEncounterSeconds() || 1;
+        // Header
+        const headerName = (user.name && user.name!=='...') ? user.name : ('#'+uid);
+        breakdownTitle.textContent = `${headerName} — Tanking Breakdown`;
+        // Table
+        const tableHtml = [
+            '<div class="bd-header"><span class="title">Tanking Sources</span><span>Total: '+formatNumber(total)+'</span></div>',
+            '<table class="bd-table">',
+            '<thead><tr>',
+            '<th>Source</th><th style="text-align:right">Total</th><th style="text-align:right">%</th>',
+            '</tr></thead><tbody>'
+        ];
+        for (const r of rows) {
+            tableHtml.push('<tr>');
+            tableHtml.push('<td>'+r.name+'</td>');
+            tableHtml.push('<td style="text-align:right">'+formatNumber(r.total)+'</td>');
+            tableHtml.push('<td style="text-align:right">'+r.pct.toFixed(1)+'%</td>');
+            tableHtml.push('</tr>');
+        }
+        tableHtml.push('</tbody></table>');
+        breakdownBody.innerHTML = tableHtml.join('');
+        breakdownModal.classList.remove('hidden');
+    }).catch(()=>{});
+}
+
+function openNpcBreakdown(enemyUid, enemyName) {
+    if (!breakdownModal) return;
+    fetch(`/api/npc/${enemyUid}`).then(r=>r.json()).then(resp=>{
+        if (!(resp?.code === 0 && resp.data)) return;
+        const data = resp.data;
+        const total = data.total || 0;
+        const items = Array.isArray(data.items) ? data.items : [];
+        const rows = items.map(it=> ({ name: it.name || ('#'+it.attackerUid), total: it.amount||0, pct: total? ((it.amount||0)/total*100):0 })).sort((a,b)=> b.total-a.total);
+        const title = data.enemyName || enemyName || ('#'+enemyUid);
+        breakdownTitle.textContent = `${title} — NPC Breakdown`;
+        const tableHtml = [
+            '<div class="bd-header"><span class="title">Damage By Player</span><span>Total: '+formatNumber(total)+'</span></div>',
+            '<table class="bd-table">',
+            '<thead><tr>',
+            '<th>Player</th><th style="text-align:right">Total</th><th style="text-align:right">%</th>',
+            '</tr></thead><tbody>'
+        ];
+        for (const r of rows) {
+            tableHtml.push('<tr>');
+            tableHtml.push('<td>'+r.name+'</td>');
+            tableHtml.push('<td style="text-align:right">'+formatNumber(r.total)+'</td>');
+            tableHtml.push('<td style="text-align:right">'+r.pct.toFixed(1)+'%</td>');
+            tableHtml.push('</tr>');
+        }
+        tableHtml.push('</tbody></table>');
+        breakdownBody.innerHTML = tableHtml.join('');
+        breakdownModal.classList.remove('hidden');
+    }).catch(()=>{});
+}
+
 function checkConnection() {
     if (!isWebSocketConnected && socket && socket.disconnected) {
         showServerStatus('reconnecting');
@@ -508,15 +580,22 @@ function openBreakdown(user) {
         if (!(resp?.code === 0 && resp.data)) return;
         const data = resp.data;
         const skills = data.skills || {};
-        const totalSum = Object.values(skills).reduce((s, v)=> s + (v.totalDamage||0), 0) || 1;
+        const isHpsMode = (rankingMode === 'hps');
+        const skillEntries = Object.entries(skills)
+            .filter(([sid, s]) => {
+                const t = (s?.type || '').toString();
+                if (isHpsMode) return t && t !== '伤害'; // include healing-type rows
+                return t === '伤害' || t === ''; // default DPS rows
+            });
+        const totalSum = skillEntries.reduce((s, [_, v])=> s + (v.totalDamage||0), 0) || 1;
         const activeSeconds = isHistorical
             ? (historicalEncounterSeconds || 1)
             : Math.max(1, Math.floor(((typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer >= 0)
                 ? combatTimeMsFromServer
                 : (lastCombatTs && fightStartTs ? Math.max(0, Date.now() - fightStartTs) : 0)) / 1000));
-        const rows = Object.entries(skills).map(([sid, s]) => {
+        const rows = skillEntries.map(([sid, s]) => {
             const total = s.totalDamage || 0;
-            const dps = total / activeSeconds;
+            const dps = total / activeSeconds; // shown as DPS/HPS depending on mode
             const count = s.totalCount || 0;
             const critRate = s.critRate != null ? s.critRate : (s.totalCount ? (s.critCount || 0)/s.totalCount : 0);
             const avg = count ? total / count : 0;
@@ -532,10 +611,10 @@ function openBreakdown(user) {
 
         // Table
         const tableHtml = [
-            '<div class="bd-header"><span class="title">Skill Breakdown</span><span>Active: '+activeSeconds+'s <span class="bd-badge">'+formatNumber(totalSum)+' total</span></span></div>',
+            '<div class="bd-header"><span class="title">'+(isHpsMode?'Healing':'Damage')+' Breakdown</span><span>Active: '+activeSeconds+'s <span class="bd-badge">'+formatNumber(totalSum)+' total</span></span></div>',
             '<table class="bd-table">',
             '<thead><tr>',
-            '<th>Skill</th><th style="text-align:right">Total</th><th style="text-align:right">DPS</th><th style="text-align:right">Hits</th><th style="text-align:right">Crit%</th><th style="text-align:right">Avg/Hit</th><th style="text-align:right">%</th>',
+            '<th>Skill</th><th style="text-align:right">Total</th><th style="text-align:right">'+(isHpsMode?'HPS':'DPS')+'</th><th style="text-align:right">Hits</th><th style="text-align:right">Crit%</th><th style="text-align:right">Avg/Hit</th><th style="text-align:right">%</th>',
             '</tr></thead><tbody>'
         ];
         for (const r of rows) {

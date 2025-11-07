@@ -289,6 +289,13 @@ export class PacketProcessor {
                     try { userDataManager.addEvent('heal', { attackerUid: isAttackerPlayer ? attackerUuid.toNumber() : 0, targetUid: targetUuid.toNumber(), skillId, value: damage.toNumber(), hpLessen: hpLessenValue.toNumber(), crit: isCrit, lucky: isLucky, causeLucky: isCauseLucky, element: syncDamageInfo.Property, source: damageSource }); } catch (_) {}
                 } else {
                     userDataManager.addTakenDamage(targetUuid.toNumber(), damage.toNumber(), isDead);
+                    // Tanking breakdown: attribute damage to attacker (player or enemy)
+                    try {
+                        const victimUid = targetUuid.toNumber();
+                        const attackerId = attackerUuid.toNumber();
+                        const val = (hpLessenValue && hpLessenValue.toNumber && hpLessenValue.toNumber() > 0) ? hpLessenValue.toNumber() : damage.toNumber();
+                        userDataManager.addTakenFrom(victimUid, attackerId, val);
+                    } catch (_) {}
                     try { userDataManager.addEvent('taken_damage', { targetUid: targetUuid.toNumber(), value: damage.toNumber(), isDead }); } catch (_) {}
                 }
                 if (isDead) {
@@ -309,11 +316,18 @@ export class PacketProcessor {
                     );
                     // Track NPC tanking based on hpLessenValue when available (fallback to damage)
                     userDataManager.addEnemyTaken(targetUuid.toNumber(), hpLessenValue.toNumber(), damage.toNumber());
-                    try { userDataManager.addEvent('damage', { attackerUid: attackerUuid.toNumber(), targetUid: targetUid.toNumber(), skillId, value: damage.toNumber(), hpLessen: hpLessenValue.toNumber(), crit: isCrit, lucky: isLucky, causeLucky: isCauseLucky, element: syncDamageInfo.Property, source: damageSource }); } catch (_) {}
+                    // NPC breakdown: per enemy, by attacker player
+                    try {
+                        const attackerId = attackerUuid.toNumber();
+                        const enemyId = targetUuid.toNumber();
+                        const val = (hpLessenValue && hpLessenValue.toNumber && hpLessenValue.toNumber() > 0) ? hpLessenValue.toNumber() : damage.toNumber();
+                        userDataManager.addNpcDamage(attackerId, enemyId, val);
+                    } catch (_) {}
+                    try { userDataManager.addEvent('damage', { attackerUid: attackerUuid.toNumber(), targetUid: targetUuid.toNumber(), skillId, value: damage.toNumber(), hpLessen: hpLessenValue.toNumber(), crit: isCrit, lucky: isLucky, causeLucky: isCauseLucky, element: syncDamageInfo.Property, source: damageSource }); } catch (_) {}
                 }
                 if (isDead) {
                     userDataManager.deleteEnemyData(targetUuid.toNumber());
-                    try { userDataManager.addEvent('death', { targetUid: targetUid.toNumber() }); } catch (_) {}
+                    try { userDataManager.addEvent('death', { targetUid: targetUuid.toNumber() }); } catch (_) {}
                 }
             }
 

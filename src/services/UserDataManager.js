@@ -31,6 +31,9 @@ class UserDataManager {
 
         // Track total damage taken per enemy (for NPC tanking view)
         this.enemiesTaken = new Map();
+        // Tanking/NPC breakdowns
+        this.tankingByVictim = new Map(); // victimUid -> Map<attackerUid, total>
+        this.npcDamageByEnemy = new Map(); // enemyUid -> Map<attackerUid, total>
 
         // 自动保存
         this.lastAutoSaveTime = 0;
@@ -730,6 +733,53 @@ class UserDataManager {
         } catch (_) {
             // ignore pruning errors
         }
+    }
+
+    // --- Tanking/NPC breakdown collectors & getters ---
+    addNpcDamage(attackerUid, enemyUid, amount) {
+        if (!Number.isFinite(amount) || amount <= 0) return;
+        if (!this.npcDamageByEnemy.has(enemyUid)) this.npcDamageByEnemy.set(enemyUid, new Map());
+        const m = this.npcDamageByEnemy.get(enemyUid);
+        m.set(attackerUid, (m.get(attackerUid) || 0) + amount);
+    }
+
+    addTakenFrom(victimUid, attackerUid, amount) {
+        if (!Number.isFinite(amount) || amount <= 0) return;
+        if (!this.tankingByVictim.has(victimUid)) this.tankingByVictim.set(victimUid, new Map());
+        const m = this.tankingByVictim.get(victimUid);
+        m.set(attackerUid, (m.get(attackerUid) || 0) + amount);
+    }
+
+    getTankingBreakdown(victimUid) {
+        const map = this.tankingByVictim.get(victimUid) || new Map();
+        let total = 0;
+        const items = [];
+        for (const [attackerUid, amount] of map.entries()) {
+            total += amount;
+            // resolve name: player or enemy
+            const player = this.users.get(attackerUid);
+            const pName = player?.name && player.name !== '' ? player.name : null;
+            const eName = this.enemyCache.name.get(attackerUid) || null;
+            const name = pName || eName || `#${attackerUid}`;
+            items.push({ attackerUid, name, amount });
+        }
+        items.sort((a,b)=> b.amount - a.amount);
+        return { victimUid, total, items };
+    }
+
+    getNpcBreakdown(enemyUid) {
+        const map = this.npcDamageByEnemy.get(enemyUid) || new Map();
+        let total = 0;
+        const items = [];
+        for (const [attackerUid, amount] of map.entries()) {
+            total += amount;
+            const player = this.users.get(attackerUid);
+            const name = (player?.name && player.name !== '') ? player.name : `#${attackerUid}`;
+            items.push({ attackerUid, name, amount });
+        }
+        items.sort((a,b)=> b.amount - a.amount);
+        const enemyName = this.enemyCache.name.get(enemyUid) || `#${enemyUid}`;
+        return { enemyUid, enemyName, total, items };
     }
 }
 
