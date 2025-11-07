@@ -13,11 +13,13 @@ const decoders = cap.decoders;
 const PROTOCOL = decoders.PROTOCOL;
 
             const clearDataOnServerChange = () => {
-    if (!globalSettings.autoClearOnServerChange) return;
+                const allow = (typeof globalSettings !== 'undefined' && typeof globalSettings.autoClearOnServerChange === 'boolean') ? globalSettings.autoClearOnServerChange : true;
+                if (!allow) return;
                 // In scene-session mode, roll immediately; otherwise arm for next combat event
                 try {
                     if (userDataManager.sceneSessionMode) {
                         userDataManager.clearAll();
+                        try { userDataManager.addEvent('scene_rollover', { source: 'scene_server' }); } catch (_) {}
                     } else {
                         userDataManager.requestClear();
                     }

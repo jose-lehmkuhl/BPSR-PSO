@@ -243,9 +243,9 @@ class UserDataManager {
     // Heuristic: large bursts of entity Appear within a short window imply map/scene load
     recordAppearBatch(count) {
         const now = Date.now();
-        const WINDOW_MS = 2000;
-        const INSTANT_THRESHOLD = 40; // single packet
-        const CUMULATIVE_THRESHOLD = 80; // within window
+        const WINDOW_MS = 3000;
+        const INSTANT_THRESHOLD = 15; // single notify
+        const CUMULATIVE_THRESHOLD = 30; // within window
         if (!count || count <= 0) return;
         if (!this.appearWindow.startTs || (now - this.appearWindow.startTs) > WINDOW_MS) {
             this.appearWindow.startTs = now;
@@ -258,6 +258,7 @@ class UserDataManager {
             // In scene-session mode, roll immediately
             if (this.sceneSessionMode) {
                 this.clearAll();
+                try { this.addEvent('scene_rollover', { source: 'appear_burst' }); } catch (_) {}
             } else {
                 this.requestClear();
             }
