@@ -951,7 +951,10 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 if (!obj || !obj.type) continue;
                 if (obj.type === 'damage' || obj.type === 'taken_damage') {
                     const t = Number(obj.ts || 0);
-                    if (Number.isFinite(t) && t > lastActiveTs) lastActiveTs = t;
+                    if (Number.isFinite(t)) {
+                        if (t > lastActiveTs) lastActiveTs = t;
+                        if (currentStart == null) currentStart = t;
+                    }
                 }
                 if (obj.type === 'battle_section_open') {
                     const s = Number(obj?.data?.start || obj.ts || 0);
