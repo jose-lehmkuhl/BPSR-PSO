@@ -93,6 +93,8 @@ class UserDataManager {
 
     // New: Method to remove users who have not been updated in 60 seconds
     cleanUpInactiveUsers() {
+        // In scene-session mode, do not prune users automatically; only reset on scene change.
+        if (this.sceneSessionMode) return;
         const inactiveThreshold = 60 * 1000; // 1 minute
         const currentTime = Date.now();
 

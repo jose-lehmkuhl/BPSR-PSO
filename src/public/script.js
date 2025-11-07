@@ -316,30 +316,12 @@ function processDataUpdate(data) {
         allUsers[userId] = updatedUser;
     }
 
-    // Detect per-user decreases (new fight started after server clear but first payload not empty)
+    // Remove any client-side encounter reset heuristics; rely only on scene changes.
+    // Keep last totals for potential future display/diagnostics, but do not reset UI or timers locally.
     const nowTs = Date.now();
     const sumDmg = Object.values(allUsers).reduce((s,u)=> s + ((u.total_damage?.total)||0), 0);
     const sumHeal = Object.values(allUsers).reduce((s,u)=> s + ((u.total_healing?.total)||0), 0);
-    // Per-user decrease heuristic removed to avoid false positives mid-combat
-    // Combat timing: detect activity only when totals increase (not just > 0)
-    const increased = sumDmg > lastTotals.dmg || sumHeal > lastTotals.heal;
-    if (increased) {
-        const oocSec = parseInt(oocTimer?.value || '15', 10);
-        const newFightDetected = fightStartTs && lastCombatTs && (nowTs - lastCombatTs) >= oocSec * 1000;
-        if (newFightDetected) {
-            // Start fresh locally (no server clear): clear bars/colors and reset timer
-            allUsers = {};
-            userColors = {};
-            fightStartTs = nowTs;
-            lastCombatTs = nowTs;
-            lastTotals = { dmg: sumDmg, heal: sumHeal };
-            updateAll();
-            return;
-        }
-        if (!fightStartTs) fightStartTs = nowTs;
-        lastCombatTs = nowTs;
-        lastTotals = { dmg: sumDmg, heal: sumHeal };
-    }
+    lastTotals = { dmg: sumDmg, heal: sumHeal };
 
     // Use server-provided timing for accurate fight window
     // Only apply scene start when server doesn't provide combat time (avoid using map time)
