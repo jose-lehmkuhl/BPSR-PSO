@@ -539,20 +539,12 @@ function openTankingBreakdown(user) {
 function openNpcBreakdown(enemyUid, enemyName) {
     if (!breakdownModal) return;
     const isHistorical = currentEncounter !== 'current';
-    let endpoint = `/api/npc/${enemyUid}`;
-    if (isHistorical) {
-        const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
-        if (m) {
-            endpoint = `/api/history/${m[1]}/section/${m[2]}/npc/${enemyUid}`;
-        } else {
-            endpoint = `/api/history/${currentEncounter}/npc/${enemyUid}`;
-        }
-    }
-    fetch(endpoint).then(r=>r.json()).then(resp=>{
-        if (!(resp?.code === 0 && resp.data)) return;
+    const buildAndShow = (resp) => {
+        if (!(resp?.code === 0 && resp.data)) return false;
         const data = resp.data;
         const total = data.total || 0;
         const items = Array.isArray(data.items) ? data.items : [];
+        if (items.length === 0) return false;
         const rows = items.map(it=> ({ name: it.name || ('#'+it.attackerUid), total: it.amount||0, pct: total? ((it.amount||0)/total*100):0 })).sort((a,b)=> b.total-a.total);
         const title = data.enemyName || enemyName || ('#'+enemyUid);
         breakdownTitle.textContent = `${title} — NPC Breakdown`;
@@ -573,7 +565,28 @@ function openNpcBreakdown(enemyUid, enemyName) {
         tableHtml.push('</tbody></table>');
         breakdownBody.innerHTML = tableHtml.join('');
         breakdownModal.classList.remove('hidden');
-    }).catch(()=>{});
+        return true;
+    };
+    (async ()=>{
+        try {
+            if (isHistorical) {
+                const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
+                if (m) {
+                    const r = await fetch(`/api/history/${m[1]}/section/${m[2]}/npc/${enemyUid}`);
+                    const js = await r.json();
+                    buildAndShow(js);
+                    return;
+                }
+                const r2 = await fetch(`/api/history/${currentEncounter}/npc/${enemyUid}`);
+                const js2 = await r2.json();
+                buildAndShow(js2);
+                return;
+            }
+            const rLive = await fetch(`/api/npc/${enemyUid}`);
+            const jsLive = await rLive.json();
+            buildAndShow(jsLive);
+        } catch(_){ }
+    })();
 }
 
 function checkConnection() {
@@ -600,18 +613,9 @@ function openBreakdown(user, modeOverride) {
     // Build skills array from skill summaries on demand via API if historical; else from live snapshot composed server-side
     const uid = user.id;
     const isHistorical = currentEncounter !== 'current';
-    let endpoint = `/api/skill/${uid}`;
-    if (isHistorical) {
-        const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
-        if (m) {
-            endpoint = `/api/history/${m[1]}/section/${m[2]}/skill/${uid}`;
-        } else {
-            endpoint = `/api/history/${currentEncounter}/skill/${uid}`;
-        }
-    }
-    fetch(endpoint).then(r=>r.json()).then((resp)=>{
-        if (!(resp?.code === 0 && resp.data)) return;
-        const data = resp.data;
+    const buildAndShow = (resp) => {
+        if (!(resp?.code === 0 && resp.data)) return false;
+        const data = resp.data || {};
         const skills = data.skills || {};
         const currentMode = modeOverride || rankingMode;
         const isHpsMode = (currentMode === 'hps');
@@ -626,6 +630,7 @@ function openBreakdown(user, modeOverride) {
                 // damage: explicit type or sid below 1e9
                 return t === '伤害' || (Number.isFinite(sidNum) && sidNum < 1000000000);
             });
+        if (skillEntries.length === 0) return false;
         const totalSum = skillEntries.reduce((s, [_, v])=> s + (v.totalDamage||0), 0) || 1;
         const activeSeconds = isHistorical
             ? (historicalEncounterSeconds || 1)
@@ -670,7 +675,28 @@ function openBreakdown(user, modeOverride) {
         tableHtml.push('</tbody></table>');
         breakdownBody.innerHTML = tableHtml.join('');
         breakdownModal.classList.remove('hidden');
-    }).catch(()=>{});
+        return true;
+    };
+    (async ()=>{
+        try {
+            if (isHistorical) {
+                const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
+                if (m) {
+                    const r = await fetch(`/api/history/${m[1]}/section/${m[2]}/skill/${uid}`);
+                    const js = await r.json();
+                    buildAndShow(js);
+                    return;
+                }
+                const r2 = await fetch(`/api/history/${currentEncounter}/skill/${uid}`);
+                const js2 = await r2.json();
+                buildAndShow(js2);
+                return;
+            }
+            const rLive = await fetch(`/api/skill/${uid}`);
+            const jsLive = await rLive.json();
+            buildAndShow(jsLive);
+        } catch(_){ }
+    })();
 }
 
 function toggleSettings() {

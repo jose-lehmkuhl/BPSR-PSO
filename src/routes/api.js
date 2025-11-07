@@ -978,6 +978,7 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
                 const ts = Number(obj.ts || 0);
                 if (ts < s.start || ts > s.end) continue;
+                if (obj.type !== 'damage' && obj.type !== 'heal') continue;
                 const d = obj.data || {};
                 const attacker = Number(d.attackerUid);
                 if (!Number.isFinite(attacker) || attacker !== me) continue;
