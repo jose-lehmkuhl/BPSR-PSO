@@ -625,11 +625,13 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             const usersPath = path.join(logDir, 'allUserData.json');
             const enemiesPath = path.join(logDir, 'enemies.json');
             let userNames = {};
+            let userMeta = {};
             let enemyNames = {};
             try {
                 const rawU = await fsPromises.readFile(usersPath, 'utf8');
                 const objU = JSON.parse(rawU || '{}');
-                for (const [k, v] of Object.entries(objU || {})) {
+                userMeta = objU || {};
+                for (const [k, v] of Object.entries(userMeta)) {
                     if (v && typeof v.name === 'string') userNames[k] = v.name;
                 }
             } catch (_) {}
@@ -723,7 +725,20 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             }
             const userOut = {};
             for (const [uid, u] of userAgg.entries()) {
-                userOut[String(uid)] = { name: u.name, total_damage: u.total_damage, total_healing: u.total_healing, total_dps: u.total_dps, total_hps: u.total_hps, taken_damage: u.taken_damage };
+                const meta = userMeta[String(uid)] || {};
+                const profession = typeof meta.profession === 'string' ? meta.profession : '';
+                const fightPoint = (meta.attr && typeof meta.attr.fightPoint === 'number') ? meta.attr.fightPoint
+                                   : (typeof meta.fightPoint === 'number' ? meta.fightPoint : undefined);
+                userOut[String(uid)] = {
+                    name: u.name,
+                    profession,
+                    fightPoint,
+                    total_damage: u.total_damage,
+                    total_healing: u.total_healing,
+                    total_dps: u.total_dps,
+                    total_hps: u.total_hps,
+                    taken_damage: u.taken_damage
+                };
             }
             const enemiesOut = {};
             for (const [eid, total] of enemiesAgg.entries()) {
@@ -912,6 +927,7 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             const usersPath = path.join(logDir, 'allUserData.json');
             let userName = `#${uid}`;
             let profession = '';
+            let fightPoint = undefined;
             try {
                 const rawU = await fsPromises.readFile(usersPath, 'utf8');
                 const objU = JSON.parse(rawU || '{}');
@@ -919,6 +935,8 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 if (me) {
                     if (typeof me.name === 'string') userName = me.name;
                     if (typeof me.profession === 'string') profession = me.profession;
+                    if (me?.attr && typeof me.attr.fightPoint === 'number') fightPoint = me.attr.fightPoint;
+                    else if (typeof me.fightPoint === 'number') fightPoint = me.fightPoint;
                 }
             } catch (_) {}
             const raw = await fsPromises.readFile(eventsPath, 'utf8');
@@ -977,7 +995,8 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 const sObj = skills[sid];
                 sObj.critRate = sObj.totalCount ? (sObj.critCount / sObj.totalCount) : 0;
             }
-            res.json({ code: 0, data: { name: userName, profession, skills } });
+            const attr = (typeof fightPoint === 'number') ? { fightPoint } : undefined;
+            res.json({ code: 0, data: { name: userName, profession, fightPoint, ...(attr?{attr}:{}), skills } });
         } catch (e) {
             logger.error('Failed to build section skill breakdown', e);
             res.status(500).json({ code: 1, msg: 'Failed to get section skill breakdown' });
