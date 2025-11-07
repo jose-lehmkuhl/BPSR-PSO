@@ -93,6 +93,7 @@ let lastKnownFightStart = 0;
 let historicalEncounterSeconds = null;
 let combatIdleMsFromServer = null;
 let combatTimeMsFromServer = null;
+let combatClockFromServer = { start: 0, last: 0, idle: 5000 };
 
 const SERVER_URL = window.location.host;
 
@@ -426,6 +427,7 @@ function connectWebSocket() {
         }
         if (typeof data.combatIdleMs === 'number') combatIdleMsFromServer = data.combatIdleMs;
         if (typeof data.combatTimeMs === 'number') combatTimeMsFromServer = data.combatTimeMs;
+        if (data.combatClock && typeof data.combatClock === 'object') combatClockFromServer = data.combatClock;
         lastWebSocketMessage = Date.now();
         // Avoid overriding historical view on live updates
         if (currentEncounter === 'current') updateAll();
@@ -606,8 +608,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // Prefer server-provided combat time to display the timer
         let showMs;
-        if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer >= 0) {
+        if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer > 0) {
             showMs = combatTimeMsFromServer;
+        } else if (combatClockFromServer && combatClockFromServer.start && combatClockFromServer.last) {
+            const clampEnd = Math.min(now, combatClockFromServer.last + (combatClockFromServer.idle || 5000));
+            showMs = Math.max(0, clampEnd - combatClockFromServer.start);
         } else {
             const sinceLast = now - lastCombatTs;
             if (sinceLast < oocMs) {

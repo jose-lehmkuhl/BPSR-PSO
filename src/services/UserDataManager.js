@@ -82,6 +82,14 @@ class UserDataManager {
         return total;
     }
 
+    getCombatClockSnapshot() {
+        return {
+            start: this.currentBattleStartTs || 0,
+            last: this.lastDamageTs || 0,
+            idle: this.battleIdleMs || 5000,
+        };
+    }
+
     // New: Method to remove users who have not been updated in 60 seconds
     cleanUpInactiveUsers() {
         const inactiveThreshold = 60 * 1000; // 1 minute

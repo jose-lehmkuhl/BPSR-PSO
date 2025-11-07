@@ -85,6 +85,7 @@ class Server {
                     lastActivityTime: userDataManager.lastLogTime,
                     combatIdleMs: userDataManager.battleIdleMs,
                     combatTimeMs: userDataManager.getLiveCombatTimeMs(),
+                    combatClock: userDataManager.getCombatClockSnapshot(),
                 });
             }
         }, 100);
