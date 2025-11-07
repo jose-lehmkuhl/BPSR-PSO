@@ -613,7 +613,7 @@ function openBreakdown(user, modeOverride) {
     // Build skills array from skill summaries on demand via API if historical; else from live snapshot composed server-side
     const uid = user.id;
     const isHistorical = currentEncounter !== 'current';
-    const buildAndShow = (resp) => {
+    const buildAndShow = async (resp) => {
         if (!(resp?.code === 0 && resp.data)) return false;
         const data = resp.data || {};
         const skills = data.skills || {};
@@ -630,8 +630,7 @@ function openBreakdown(user, modeOverride) {
                 // damage: explicit type or sid below 1e9
                 return t === '伤害' || (Number.isFinite(sidNum) && sidNum < 1000000000);
             });
-        if (skillEntries.length === 0) return false;
-        const totalSum = skillEntries.reduce((s, [_, v])=> s + (v.totalDamage||0), 0) || 1;
+        const totalSum = skillEntries.reduce((s, [_, v])=> s + (v.totalDamage||0), 0) || 0;
         const activeSeconds = isHistorical
             ? (historicalEncounterSeconds || 1)
             : Math.max(1, Math.floor(((typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer >= 0)
@@ -661,18 +660,52 @@ function openBreakdown(user, modeOverride) {
             '<th>Skill</th><th style="text-align:right">Total</th><th style="text-align:right">'+(isHpsMode?'HPS':'DPS')+'</th><th style="text-align:right">Hits</th><th style="text-align:right">Crit%</th><th style="text-align:right">Avg/Hit</th><th style="text-align:right">%</th>',
             '</tr></thead><tbody>'
         ];
-        for (const r of rows) {
-            tableHtml.push('<tr>');
-            tableHtml.push('<td>'+r.name+'</td>');
-            tableHtml.push('<td style="text-align:right">'+formatNumber(r.total)+'</td>');
-            tableHtml.push('<td style="text-align:right">'+formatNumber(r.dps)+'</td>');
-            tableHtml.push('<td style="text-align:right">'+r.count+'</td>');
-            tableHtml.push('<td style="text-align:right">'+(r.critRate*100).toFixed(1)+'%</td>');
-            tableHtml.push('<td style="text-align:right">'+formatNumber(r.avg)+'</td>');
-            tableHtml.push('<td style="text-align:right">'+r.pct.toFixed(1)+'%</td>');
-            tableHtml.push('</tr>');
+        if (rows.length === 0) {
+            tableHtml.push('<tr><td colspan="7" style="text-align:center;color:#aaa">No skill data for this selection.</td></tr>');
+        } else {
+            for (const r of rows) {
+                tableHtml.push('<tr>');
+                tableHtml.push('<td>'+r.name+'</td>');
+                tableHtml.push('<td style="text-align:right">'+formatNumber(r.total)+'</td>');
+                tableHtml.push('<td style="text-align:right">'+formatNumber(r.dps)+'</td>');
+                tableHtml.push('<td style="text-align:right">'+r.count+'</td>');
+                tableHtml.push('<td style="text-align:right">'+(r.critRate*100).toFixed(1)+'%</td>');
+                tableHtml.push('<td style="text-align:right">'+formatNumber(r.avg)+'</td>');
+                tableHtml.push('<td style="text-align:right">'+r.pct.toFixed(1)+'%</td>');
+                tableHtml.push('</tr>');
+            }
         }
         tableHtml.push('</tbody></table>');
+        // Add Damage by Target list (DPS mode only)
+        if (!isHpsMode) {
+            try {
+                let ptUrl = null;
+                if (isHistorical) {
+                    const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
+                    if (m) ptUrl = `/api/history/${m[1]}/section/${m[2]}/player-targets/${uid}`;
+                    else ptUrl = `/api/history/${currentEncounter}/player-targets/${uid}`;
+                }
+                if (ptUrl) {
+                    const pr = await fetch(ptUrl);
+                    const pjs = await pr.json();
+                    if (pjs?.code === 0 && pjs.data) {
+                        const items = Array.isArray(pjs.data.items) ? pjs.data.items : [];
+                        const totalT = pjs.data.total || 0;
+                        tableHtml.push('<div class="bd-header" style="margin-top:10px"><span class="title">Damage By Target</span><span>Total: '+formatNumber(totalT)+'</span></div>');
+                        tableHtml.push('<table class="bd-table"><thead><tr><th>Target</th><th style="text-align:right">Total</th><th style="text-align:right">%</th></tr></thead><tbody>');
+                        if (items.length === 0) {
+                            tableHtml.push('<tr><td colspan="3" style="text-align:center;color:#aaa">No target data.</td></tr>');
+                        } else {
+                            for (const it of items) {
+                                const pct = totalT ? (it.amount/totalT*100) : 0;
+                                tableHtml.push('<tr><td>'+ (it.name || ('#'+it.targetUid)) +'</td><td style="text-align:right">'+formatNumber(it.amount)+'</td><td style="text-align:right">'+pct.toFixed(1)+'%</td></tr>');
+                            }
+                        }
+                        tableHtml.push('</tbody></table>');
+                    }
+                }
+            } catch (_) {}
+        }
         breakdownBody.innerHTML = tableHtml.join('');
         breakdownModal.classList.remove('hidden');
         return true;

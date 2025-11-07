@@ -28,6 +28,127 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         res.json(data);
     });
 
+    // Scene-level: per-player damage by target
+    router.get('/history/:timestamp/player-targets/:uid', async (req, res) => {
+        try {
+            const { timestamp, uid } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const enemiesPath = path.join(logDir, 'enemies.json');
+            let enemyNames = {};
+            try {
+                const rawE = await fsPromises.readFile(enemiesPath, 'utf8');
+                enemyNames = JSON.parse(rawE || '{}') || {};
+            } catch (_) {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\r?\n/);
+            const me = Number.parseInt(uid, 10);
+            const byTarget = new Map();
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || obj.type !== 'damage') continue;
+                const d = obj.data || {};
+                const attackerUid = Number(d.attackerUid);
+                const targetUid = Number(d.targetUid);
+                if (!Number.isFinite(attackerUid) || attackerUid !== me) continue;
+                if (!Number.isFinite(targetUid)) continue;
+                const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                if (val <= 0) continue;
+                byTarget.set(targetUid, (byTarget.get(targetUid) || 0) + val);
+            }
+            let total = 0;
+            const items = [];
+            for (const [targetUid, amount] of byTarget.entries()) {
+                total += amount;
+                const name = enemyNames[String(targetUid)] || `#${targetUid}`;
+                items.push({ targetUid, name, amount });
+            }
+            items.sort((a,b)=> b.amount - a.amount);
+            res.json({ code: 0, data: { uid: me, total, items } });
+        } catch (e) {
+            logger.error('Failed to build player-targets (scene)', e);
+            res.status(500).json({ code: 1, msg: 'Failed to build player-targets' });
+        }
+    });
+
+    // Section-level: per-player damage by target
+    router.get('/history/:timestamp/section/:index/player-targets/:uid', async (req, res) => {
+        try {
+            const { timestamp, index, uid } = req.params;
+            const logDir = path.join('./logs', timestamp);
+            const eventsPath = path.join(logDir, 'events.ndjson');
+            const enemiesPath = path.join(logDir, 'enemies.json');
+            let enemyNames = {};
+            try {
+                const rawE = await fsPromises.readFile(enemiesPath, 'utf8');
+                enemyNames = JSON.parse(rawE || '{}') || {};
+            } catch (_) {}
+            const raw = await fsPromises.readFile(eventsPath, 'utf8');
+            const lines = raw.split(/\r?\n/);
+            // Build sections
+            const secs = [];
+            let currentStart = null, lastEnd = -1, lastActiveTs = -1;
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || !obj.type) continue;
+                if (obj.type === 'damage' || obj.type === 'taken_damage') {
+                    const t = Number(obj.ts || 0);
+                    if (Number.isFinite(t)) {
+                        if (lastActiveTs < t) lastActiveTs = t;
+                        if (currentStart == null) currentStart = t;
+                    }
+                }
+                if (obj.type === 'battle_section_open') {
+                    const s = Number(obj?.data?.start || obj.ts || 0);
+                    if (s && currentStart == null) currentStart = s;
+                } else if (obj.type === 'battle_section_close') {
+                    const end = Number(obj?.data?.end || obj.ts || 0);
+                    if (currentStart != null && end >= currentStart && end !== lastEnd) {
+                        secs.push({ start: currentStart, end });
+                        lastEnd = end;
+                        currentStart = null;
+                    }
+                }
+            }
+            if (currentStart != null && lastActiveTs >= currentStart && lastActiveTs !== lastEnd) {
+                secs.push({ start: currentStart, end: lastActiveTs });
+            }
+            const idx = Number.parseInt(index, 10);
+            if (!(idx >= 0 && idx < secs.length)) return res.status(404).json({ code: 1, msg: 'Section not found' });
+            const s = secs[idx];
+            const me = Number.parseInt(uid, 10);
+            const byTarget = new Map();
+            for (const line of lines) {
+                if (!line) continue;
+                let obj; try { obj = JSON.parse(line); } catch { continue; }
+                if (!obj || obj.type !== 'damage') continue;
+                const ts = Number(obj.ts || 0);
+                if (ts < s.start || ts > s.end) continue;
+                const d = obj.data || {};
+                const attackerUid = Number(d.attackerUid);
+                const targetUid = Number(d.targetUid);
+                if (!Number.isFinite(attackerUid) || attackerUid !== me) continue;
+                if (!Number.isFinite(targetUid)) continue;
+                const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                if (val <= 0) continue;
+                byTarget.set(targetUid, (byTarget.get(targetUid) || 0) + val);
+            }
+            let total = 0;
+            const items = [];
+            for (const [targetUid, amount] of byTarget.entries()) {
+                total += amount;
+                const name = enemyNames[String(targetUid)] || `#${targetUid}`;
+                items.push({ targetUid, name, amount });
+            }
+            items.sort((a,b)=> b.amount - a.amount);
+            res.json({ code: 0, data: { uid: me, total, items } });
+        } catch (e) {
+            logger.error('Failed to build player-targets (section)', e);
+            res.status(500).json({ code: 1, msg: 'Failed to build player-targets' });
+        }
+    });
     // GET all enemy data
     router.get('/enemies', (req, res) => {
         const enemiesData = userDataManager.getAllEnemiesData();
