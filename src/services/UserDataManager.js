@@ -184,9 +184,10 @@ class UserDataManager {
         return this.users.get(uid);
     }
 
-    addDamage(uid, skillId, element, damage, isCrit, isLucky, isCauseLucky, hpLessenValue = 0, targetUid) {
+    async addDamage(uid, skillId, element, damage, isCrit, isLucky, isCauseLucky, hpLessenValue = 0, targetUid) {
         if (config.IS_PAUSED) return;
         this.checkTimeoutClear();
+        try { await this._tickCombat(Date.now()); } catch (_) {}
         const user = this.getUser(uid);
         user.addDamage(skillId, element, damage, isCrit, isLucky, isCauseLucky, hpLessenValue);
     }
@@ -200,9 +201,10 @@ class UserDataManager {
         }
     }
 
-    addTakenDamage(uid, damage, isDead) {
+    async addTakenDamage(uid, damage, isDead) {
         if (config.IS_PAUSED) return;
         this.checkTimeoutClear();
+        try { await this._tickCombat(Date.now()); } catch (_) {}
         const user = this.getUser(uid);
         user.addTakenDamage(damage, isDead);
     }
@@ -277,6 +279,28 @@ class UserDataManager {
             logger.error('Failed to save event:', error);
         }
         this.logLock.release();
+    }
+
+    // Ensure combat timer opens/closes on damage ticks regardless of downstream addEvent calls
+    async _tickCombat(nowTs) {
+        const logDir = path.join('./logs', String(this.startTime));
+        const eventsFile = path.join(logDir, 'events.ndjson');
+        // Close if idle exceeded
+        if (this.currentBattleStartTs != null && this.lastDamageTs > 0) {
+            if (nowTs - this.lastDamageTs >= this.battleIdleMs) {
+                const endTs = Math.min(nowTs, this.lastDamageTs + this.battleIdleMs);
+                const section = { start: this.currentBattleStartTs, end: endTs };
+                this.battleSections.push(section);
+                await this._writeEvent(eventsFile, logDir, 'battle_section_close', { start: section.start, end: section.end, durationMs: section.end - section.start });
+                this.currentBattleStartTs = null;
+            }
+        }
+        // Open if not active
+        if (this.currentBattleStartTs == null) {
+            this.currentBattleStartTs = nowTs;
+            await this._writeEvent(eventsFile, logDir, 'battle_section_open', { start: nowTs });
+        }
+        this.lastDamageTs = nowTs;
     }
 
     async addRawPacket(meta, buffer) {
