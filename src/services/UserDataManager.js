@@ -66,6 +66,9 @@ class UserDataManager {
         this.battleSections = [];
         this.currentBattleStartTs = null;
         this.lastDamageTs = 0;
+        // Safeguards for combat timer races
+        this.combatLock = new Lock();
+        this.lastSectionCloseTs = 0;
     }
 
     // Compute live combat time: sum of closed sections plus open section clamped to lastDamage+idle
@@ -248,26 +251,33 @@ class UserDataManager {
         const eventsFile = path.join(logDir, 'events.ndjson');
         const nowTs = Date.now();
 
-        // Guard against double-close/open races using simple idempotent checks
-        // Close an open battle section if we've been idle for >= battleIdleMs
-        if (this.currentBattleStartTs != null && this.lastDamageTs > 0) {
-            if (nowTs - this.lastDamageTs >= this.battleIdleMs) {
-                // Close section at lastDamageTs (exclude idle); if already paused, no-op
-                const endTs = this.lastDamageTs;
-                const section = { start: this.currentBattleStartTs, end: endTs };
-                this.battleSections.push(section);
-                await this._writeEvent(eventsFile, logDir, 'battle_section_close', { start: section.start, end: section.end, durationMs: section.end - section.start });
-                this.currentBattleStartTs = null; // paused
+        await this.combatLock.acquire();
+        try {
+            // Close an open battle section if we've been idle for >= battleIdleMs
+            if (this.currentBattleStartTs != null && this.lastDamageTs > 0) {
+                if (nowTs - this.lastDamageTs >= this.battleIdleMs) {
+                    const endTs = this.lastDamageTs;
+                    // Idempotent: skip if we already closed at this timestamp
+                    if (this.lastSectionCloseTs !== endTs) {
+                        const section = { start: this.currentBattleStartTs, end: endTs };
+                        this.battleSections.push(section);
+                        await this._writeEvent(eventsFile, logDir, 'battle_section_close', { start: section.start, end: section.end, durationMs: section.end - section.start });
+                        this.currentBattleStartTs = null;
+                        this.lastSectionCloseTs = endTs;
+                    }
+                }
             }
-        }
 
-        // On damage given or received events, open or extend a battle section
-        if (type === 'damage' || type === 'taken_damage') {
-            if (this.currentBattleStartTs == null) {
-                this.currentBattleStartTs = nowTs;
-                await this._writeEvent(eventsFile, logDir, 'battle_section_open', { start: nowTs });
+            // On damage given or received events, open or extend a battle section
+            if (type === 'damage' || type === 'taken_damage') {
+                if (this.currentBattleStartTs == null) {
+                    this.currentBattleStartTs = nowTs;
+                    await this._writeEvent(eventsFile, logDir, 'battle_section_open', { start: nowTs });
+                }
+                this.lastDamageTs = nowTs;
             }
-            this.lastDamageTs = nowTs;
+        } finally {
+            this.combatLock.release();
         }
 
         await this._writeEvent(eventsFile, logDir, type, data);
@@ -293,22 +303,30 @@ class UserDataManager {
     async _tickCombat(nowTs) {
         const logDir = path.join('./logs', String(this.startTime));
         const eventsFile = path.join(logDir, 'events.ndjson');
-        // Close if idle exceeded; if already paused, do nothing
-        if (this.currentBattleStartTs != null && this.lastDamageTs > 0) {
-            if (nowTs - this.lastDamageTs >= this.battleIdleMs) {
-                const endTs = this.lastDamageTs;
-                const section = { start: this.currentBattleStartTs, end: endTs };
-                this.battleSections.push(section);
-                await this._writeEvent(eventsFile, logDir, 'battle_section_close', { start: section.start, end: section.end, durationMs: section.end - section.start });
-                this.currentBattleStartTs = null;
+        await this.combatLock.acquire();
+        try {
+            // Close if idle exceeded
+            if (this.currentBattleStartTs != null && this.lastDamageTs > 0) {
+                if (nowTs - this.lastDamageTs >= this.battleIdleMs) {
+                    const endTs = this.lastDamageTs;
+                    if (this.lastSectionCloseTs !== endTs) {
+                        const section = { start: this.currentBattleStartTs, end: endTs };
+                        this.battleSections.push(section);
+                        await this._writeEvent(eventsFile, logDir, 'battle_section_close', { start: section.start, end: section.end, durationMs: section.end - section.start });
+                        this.currentBattleStartTs = null;
+                        this.lastSectionCloseTs = endTs;
+                    }
+                }
             }
+            // Open if not active
+            if (this.currentBattleStartTs == null) {
+                this.currentBattleStartTs = nowTs;
+                await this._writeEvent(eventsFile, logDir, 'battle_section_open', { start: nowTs });
+            }
+            this.lastDamageTs = nowTs;
+        } finally {
+            this.combatLock.release();
         }
-        // Open if not active
-        if (this.currentBattleStartTs == null) {
-            this.currentBattleStartTs = nowTs;
-            await this._writeEvent(eventsFile, logDir, 'battle_section_open', { start: nowTs });
-        }
-        this.lastDamageTs = nowTs;
     }
 
     async addRawPacket(meta, buffer) {
