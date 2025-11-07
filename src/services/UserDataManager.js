@@ -537,8 +537,9 @@ class UserDataManager {
         } finally {
             this.logLock.release();
         }
-        // Persist previous encounter outside the lock
-        this.saveAllUserData(usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot, battleSectionsSnapshot);
+        // Persist previous encounter outside the lock, then prune old logs with no damage
+        await this.saveAllUserData(usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot, battleSectionsSnapshot);
+        try { await this._pruneNoDamageLogs(); } catch (_) {}
     }
 
     clearIdentities() {
@@ -694,6 +695,41 @@ class UserDataManager {
 
     getGlobalSettings() {
         return config.GLOBAL_SETTINGS;
+    }
+
+    // Remove past encounter folders that have no damage dealt records
+    async _pruneNoDamageLogs() {
+        try {
+            const logsRoot = path.join('./logs');
+            const dirents = await fsPromises.readdir(logsRoot, { withFileTypes: true });
+            const active = String(this.startTime || '');
+            for (const d of dirents) {
+                if (!d.isDirectory()) continue;
+                const name = d.name;
+                if (!/^\d+$/.test(name)) continue;
+                if (name === active) continue; // keep current
+                const logDir = path.join(logsRoot, name);
+                const allUsersPath = path.join(logDir, 'allUserData.json');
+                let sumDamage = 0;
+                try {
+                    const raw = await fsPromises.readFile(allUsersPath, 'utf8');
+                    const obj = JSON.parse(raw || '{}');
+                    for (const key of Object.keys(obj || {})) {
+                        const u = obj[key] || {};
+                        const td = (u.total_damage && typeof u.total_damage.total === 'number') ? u.total_damage.total : 0;
+                        sumDamage += td;
+                    }
+                } catch (_) {
+                    // If can't read allUserData, skip pruning by damage criterion
+                    continue;
+                }
+                if (!(sumDamage > 0)) {
+                    await fsPromises.rm(logDir, { recursive: true, force: true });
+                }
+            }
+        } catch (_) {
+            // ignore pruning errors
+        }
     }
 }
 
