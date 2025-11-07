@@ -939,7 +939,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             try {
                 // Support scene or section selection
-                const secMatch = currentEncounter.match(/^([0-9]+)#sec:(\\d+)$/);
+                const secMatch = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
                 if (secMatch) {
                     const ts = secMatch[1];
                     const idx = secMatch[2];
