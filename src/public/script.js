@@ -107,17 +107,16 @@ function formatNumber(num) {
 function getCurrentEncounterSeconds() {
     if (currentEncounter !== 'current') return null;
     if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer >= 0) {
-        return Math.max(1, Math.floor(combatTimeMsFromServer / 1000));
+        return Math.floor(combatTimeMsFromServer / 1000);
     }
-    // Fallback to client-side heuristic if server field missing
-    const now = Date.now();
-    const oocMs = (typeof combatIdleMsFromServer === 'number' && combatIdleMsFromServer > 0)
-        ? combatIdleMsFromServer
-        : (parseInt(oocTimer?.value || '15', 10) * 1000);
-    if (!fightStartTs || !lastCombatTs) return 0;
-    const sinceLast = now - lastCombatTs;
-    const ms = sinceLast < oocMs ? (now - fightStartTs) : (lastCombatTs - fightStartTs);
-    return Math.max(1, Math.floor(ms / 1000));
+    // Fallback to server combatClock
+    if (combatClockFromServer && combatClockFromServer.start && combatClockFromServer.last) {
+        const now = Date.now();
+        const clampEnd = Math.min(now, combatClockFromServer.last + (combatClockFromServer.idle || 5000));
+        const ms = Math.max(0, clampEnd - combatClockFromServer.start);
+        return Math.floor(ms / 1000);
+    }
+    return 0;
 }
 
 function renderDataList(users) {
@@ -135,16 +134,16 @@ function renderDataList(users) {
     const encSec = (currentEncounter === 'current') ? getCurrentEncounterSeconds() : (historicalEncounterSeconds || null);
     if (mode === 'hps') {
         users.sort((a, b) => {
-            const ah = (currentEncounter === 'current' && encSec) ? ((a.total_healing?.total || 0) / encSec) : (a.total_hps || 0);
-            const bh = (currentEncounter === 'current' && encSec) ? ((b.total_healing?.total || 0) / encSec) : (b.total_hps || 0);
+            const ah = (currentEncounter === 'current') ? ((encSec && encSec>0) ? ((a.total_healing?.total || 0) / encSec) : 0) : ((encSec ? ((a.total_healing?.total || 0)/encSec) : (a.total_hps || 0)));
+            const bh = (currentEncounter === 'current') ? ((encSec && encSec>0) ? ((b.total_healing?.total || 0) / encSec) : 0) : ((encSec ? ((b.total_healing?.total || 0)/encSec) : (b.total_hps || 0)));
             return bh - ah;
         });
     } else if (mode === 'tanking') {
         users.sort((a, b) => (b.taken_damage || 0) - (a.taken_damage || 0));
     } else {
         users.sort((a, b) => {
-            const ad = (currentEncounter === 'current' && encSec) ? ((a.total_damage?.total || 0) / encSec) : (a.total_dps || 0);
-            const bd = (currentEncounter === 'current' && encSec) ? ((b.total_damage?.total || 0) / encSec) : (b.total_dps || 0);
+            const ad = (currentEncounter === 'current') ? ((encSec && encSec>0) ? ((a.total_damage?.total || 0) / encSec) : 0) : ((encSec ? ((a.total_damage?.total || 0)/encSec) : (a.total_dps || 0)));
+            const bd = (currentEncounter === 'current') ? ((encSec && encSec>0) ? ((b.total_damage?.total || 0) / encSec) : 0) : ((encSec ? ((b.total_damage?.total || 0)/encSec) : (b.total_dps || 0)));
             return bd - ad;
         });
     }
@@ -182,8 +181,12 @@ function renderDataList(users) {
         // Remove embedded HPS sub-bar from DPS tab to keep modes separate
         let subBarHtml = '';
 
-        const displayDps = (encSec) ? ((user.total_damage.total || 0) / encSec) : (user.total_dps || 0);
-        const displayHps = (encSec) ? ((user.total_healing.total || 0) / encSec) : (user.total_hps || 0);
+        const displayDps = (currentEncounter === 'current')
+            ? ((encSec && encSec > 0) ? ((user.total_damage.total || 0) / encSec) : 0)
+            : (encSec ? ((user.total_damage.total || 0) / encSec) : (user.total_dps || 0));
+        const displayHps = (currentEncounter === 'current')
+            ? ((encSec && encSec > 0) ? ((user.total_healing.total || 0) / encSec) : 0)
+            : (encSec ? ((user.total_healing.total || 0) / encSec) : (user.total_hps || 0));
         let modeStats = `${formatNumber(user.total_damage.total)} (${formatNumber(displayDps)} DPS, ${damagePercent.toFixed(1)}%)`;
         let mainBarFill = `<div class="dps-bar-fill" style="width: ${damagePercent}%; background-color: ${barColor};"></div>`;
         if (mode === 'hps') {
@@ -266,7 +269,7 @@ function updateAll() {
             .filter((e) => (e.hp || 0) >= 0);
         renderNpcTankingList(enemiesArray);
     } else {
-        const usersArray = Object.values(allUsers).filter((user) => user.total_dps > 0 || user.total_hps > 0 || (user.taken_damage||0)>0);
+        const usersArray = Object.values(allUsers).filter((user) => (user.total_damage?.total||0) > 0 || (user.total_healing?.total||0) > 0 || (user.taken_damage||0)>0);
         renderDataList(usersArray);
     }
 }
