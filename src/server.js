@@ -83,6 +83,8 @@ class Server {
                     enemies: enemiesData,
                     fightStartTime: userDataManager.startTime,
                     lastActivityTime: userDataManager.lastLogTime,
+                    combatIdleMs: userDataManager.battleIdleMs,
+                    combatTimeMs: userDataManager.getLiveCombatTimeMs(),
                 });
             }
         }, 100);

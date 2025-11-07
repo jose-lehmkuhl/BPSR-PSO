@@ -91,6 +91,8 @@ let historicalUsers = null;
 let historicalEnemies = null;
 let lastKnownFightStart = 0;
 let historicalEncounterSeconds = null;
+let combatIdleMsFromServer = null;
+let combatTimeMsFromServer = null;
 
 const SERVER_URL = window.location.host;
 
@@ -104,10 +106,12 @@ function formatNumber(num) {
 function getCurrentEncounterSeconds() {
     if (currentEncounter !== 'current') return null;
     const now = Date.now();
-    const oocSec = parseInt(oocTimer?.value || '15', 10);
+    const oocMs = (typeof combatIdleMsFromServer === 'number' && combatIdleMsFromServer > 0)
+        ? combatIdleMsFromServer
+        : (parseInt(oocTimer?.value || '15', 10) * 1000);
     if (!fightStartTs || !lastCombatTs) return 0;
     const sinceLast = now - lastCombatTs;
-    const ms = sinceLast < oocSec * 1000 ? (now - fightStartTs) : (lastCombatTs - fightStartTs);
+    const ms = sinceLast < oocMs ? (now - fightStartTs) : (lastCombatTs - fightStartTs);
     return Math.max(1, Math.floor(ms / 1000));
 }
 
@@ -416,6 +420,8 @@ function connectWebSocket() {
         if (data.enemies) {
             allEnemies = data.enemies || {};
         }
+        if (typeof data.combatIdleMs === 'number') combatIdleMsFromServer = data.combatIdleMs;
+        if (typeof data.combatTimeMs === 'number') combatTimeMsFromServer = data.combatTimeMs;
         lastWebSocketMessage = Date.now();
         // Avoid overriding historical view on live updates
         if (currentEncounter === 'current') updateAll();
@@ -584,14 +590,16 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(() => {
         if (currentEncounter !== 'current') { if (fightTimerEl) fightTimerEl.textContent = '--:--'; return; }
         const now = Date.now();
-        const oocSec = parseInt(oocTimer?.value || '15', 10);
+        const oocMs = (typeof combatIdleMsFromServer === 'number' && combatIdleMsFromServer > 0)
+            ? combatIdleMsFromServer
+            : (parseInt(oocTimer?.value || '15', 10) * 1000);
         if (!fightStartTs || !lastCombatTs) {
             if (fightTimerEl) fightTimerEl.textContent = '00:00';
             return;
         }
         const sinceLast = now - lastCombatTs;
         let showMs;
-        if (sinceLast < oocSec * 1000) {
+        if (sinceLast < oocMs) {
             showMs = Math.max(0, now - fightStartTs);
         } else {
             showMs = Math.max(0, lastCombatTs - fightStartTs); // subtract OOC window implicitly

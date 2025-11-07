@@ -65,6 +65,23 @@ class UserDataManager {
         this.lastDamageTs = 0;
     }
 
+    // Compute live combat time: sum of closed sections plus open section clamped to lastDamage+idle
+    getLiveCombatTimeMs(nowTs = Date.now()) {
+        const sections = Array.isArray(this.battleSections) ? this.battleSections : [];
+        let total = 0;
+        for (const s of sections) {
+            if (!s) continue;
+            const start = s.start || 0;
+            const end = s.end || 0;
+            if (end > start) total += (end - start);
+        }
+        if (this.currentBattleStartTs != null) {
+            const clampEnd = Math.min(nowTs, (this.lastDamageTs > 0 ? (this.lastDamageTs + this.battleIdleMs) : nowTs));
+            if (clampEnd > this.currentBattleStartTs) total += (clampEnd - this.currentBattleStartTs);
+        }
+        return total;
+    }
+
     // New: Method to remove users who have not been updated in 60 seconds
     cleanUpInactiveUsers() {
         const inactiveThreshold = 60 * 1000; // 1 minute
