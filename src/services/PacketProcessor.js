@@ -286,8 +286,10 @@ export class PacketProcessor {
                         isCauseLucky,
                         targetUuid.toNumber()
                     );
+                    try { userDataManager.addEvent('heal', { attackerUid: isAttackerPlayer ? attackerUuid.toNumber() : 0, targetUid: targetUuid.toNumber(), skillId, value: damage.toNumber(), hpLessen: hpLessenValue.toNumber(), crit: isCrit, lucky: isLucky, causeLucky: isCauseLucky, element: syncDamageInfo.Property, source: damageSource }); } catch (_) {}
                 } else {
                     userDataManager.addTakenDamage(targetUuid.toNumber(), damage.toNumber(), isDead);
+                    try { userDataManager.addEvent('taken_damage', { targetUid: targetUuid.toNumber(), value: damage.toNumber(), isDead }); } catch (_) {}
                 }
                 if (isDead) {
                     userDataManager.setAttrKV(targetUuid.toNumber(), 'hp', 0);
@@ -307,9 +309,11 @@ export class PacketProcessor {
                     );
                     // Track NPC tanking based on hpLessenValue when available (fallback to damage)
                     userDataManager.addEnemyTaken(targetUuid.toNumber(), hpLessenValue.toNumber(), damage.toNumber());
+                    try { userDataManager.addEvent('damage', { attackerUid: attackerUuid.toNumber(), targetUid: targetUid.toNumber(), skillId, value: damage.toNumber(), hpLessen: hpLessenValue.toNumber(), crit: isCrit, lucky: isLucky, causeLucky: isCauseLucky, element: syncDamageInfo.Property, source: damageSource }); } catch (_) {}
                 }
                 if (isDead) {
                     userDataManager.deleteEnemyData(targetUuid.toNumber());
+                    try { userDataManager.addEvent('death', { targetUid: targetUid.toNumber() }); } catch (_) {}
                 }
             }
 
@@ -429,6 +433,7 @@ export class PacketProcessor {
             if (professionList.CurProfessionId) {
                 userDataManager.setProfession(playerUid, getProfessionNameFromId(professionList.CurProfessionId));
             }
+            try { userDataManager.addEvent('container_snapshot', { uid: playerUid, name: (syncContainerData?.VData?.CharBase?.Name)||'', level: (vData.RoleLevel && vData.RoleLevel.Level)||null, hp: (vData.Attr && vData.Attr.CurHp && vData.Attr.CurHp.toNumber && vData.Attr.CurHp.toNumber())||null, max_hp: (vData.Attr && vData.Attr.MaxHp && vData.Attr.MaxHp.toNumber && vData.Attr.MaxHp.toNumber())||null, professionId: (vData.ProfessionList && vData.ProfessionList.CurProfessionId)||null, fightPoint: (charBase && (charBase.FightPoint?.toNumber ? charBase.FightPoint.toNumber() : charBase.FightPoint))||null }); } catch (_) {}
         } catch (err) {
             fs.writeFileSync('./SyncContainerData.dat', payloadBuffer);
             logger.warn(
@@ -473,6 +478,7 @@ export class PacketProcessor {
                             break;
                         }
                         userDataManager.setName(currentUserUuid.shiftRight(16).toNumber(), playerName);
+                        try { userDataManager.addEvent('container_dirty.name', { uid: currentUserUuid.shiftRight(16).toNumber(), name: playerName }); } catch (_) {}
                         break;
                     }
                     case 35: {
@@ -480,6 +486,7 @@ export class PacketProcessor {
                         const fightPoint = messageReader.readUInt32LE();
                         messageReader.readInt32();
                         userDataManager.setFightPoint(currentUserUuid.shiftRight(16).toNumber(), fightPoint);
+                        try { userDataManager.addEvent('container_dirty.fightPoint', { uid: currentUserUuid.shiftRight(16).toNumber(), fightPoint }); } catch (_) {}
                         break;
                     }
                 }
@@ -495,12 +502,14 @@ export class PacketProcessor {
                         // CurHp
                         const curHp = messageReader.readUInt32LE();
                         userDataManager.setAttrKV(currentUserUuid.shiftRight(16).toNumber(), 'hp', curHp);
+                        try { userDataManager.addEvent('container_dirty.hp', { uid: currentUserUuid.shiftRight(16).toNumber(), hp: curHp }); } catch (_) {}
                         break;
                     }
                     case 2: {
                         // MaxHp
                         const maxHp = messageReader.readUInt32LE();
                         userDataManager.setAttrKV(currentUserUuid.shiftRight(16).toNumber(), 'max_hp', maxHp);
+                        try { userDataManager.addEvent('container_dirty.max_hp', { uid: currentUserUuid.shiftRight(16).toNumber(), max_hp: maxHp }); } catch (_) {}
                         break;
                     }
                 }
@@ -520,6 +529,7 @@ export class PacketProcessor {
                             currentUserUuid.shiftRight(16).toNumber(),
                             getProfessionNameFromId(curProfessionId)
                         );
+                        try { userDataManager.addEvent('container_dirty.profession', { uid: currentUserUuid.shiftRight(16).toNumber(), professionId: curProfessionId }); } catch (_) {}
                     }
                 }
                 break;
@@ -535,50 +545,62 @@ export class PacketProcessor {
             switch (attr.Id) {
                 case AttrType.AttrName: {
                     userDataManager.setName(playerUid, reader.string());
+                    try { userDataManager.addEvent('player_attr.name', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrProfessionId: {
                     userDataManager.setProfession(playerUid, getProfessionNameFromId(reader.int32()));
+                    try { userDataManager.addEvent('player_attr.profession', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrFightPoint: {
                     userDataManager.setFightPoint(playerUid, reader.int32());
+                    try { userDataManager.addEvent('player_attr.fightPoint', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrLevel: {
                     userDataManager.setAttrKV(playerUid, 'level', reader.int32());
+                    try { userDataManager.addEvent('player_attr.level', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrRankLevel: {
                     userDataManager.setAttrKV(playerUid, 'rank_level', reader.int32());
+                    try { userDataManager.addEvent('player_attr.rank_level', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrCri: {
                     userDataManager.setAttrKV(playerUid, 'cri', reader.int32());
+                    try { userDataManager.addEvent('player_attr.cri', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrLucky: {
                     userDataManager.setAttrKV(playerUid, 'lucky', reader.int32());
+                    try { userDataManager.addEvent('player_attr.lucky', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrHp: {
                     userDataManager.setAttrKV(playerUid, 'hp', reader.int32());
+                    try { userDataManager.addEvent('player_attr.hp', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrMaxHp: {
                     userDataManager.setAttrKV(playerUid, 'max_hp', reader.int32());
+                    try { userDataManager.addEvent('player_attr.max_hp', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrElementFlag: {
                     userDataManager.setAttrKV(playerUid, 'element_flag', reader.int32());
+                    try { userDataManager.addEvent('player_attr.element_flag', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrEnergyFlag: {
                     userDataManager.setAttrKV(playerUid, 'energy_flag', reader.int32());
+                    try { userDataManager.addEvent('player_attr.energy_flag', { uid: playerUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrReductionLevel: {
                     userDataManager.setAttrKV(playerUid, 'reduction_level', reader.int32());
+                    try { userDataManager.addEvent('player_attr.reduction_level', { uid: playerUid }); } catch (_) {}
                     break;
                 }
             }
@@ -596,6 +618,7 @@ export class PacketProcessor {
                     const enemyName = reader.string();
                     userDataManager.enemyCache.name.set(enemyUid, enemyName);
                     logger.info(`Found monster name ${enemyName} for id ${enemyUid}`);
+                    try { userDataManager.addEvent('enemy_attr.name', { uid: enemyUid, name: enemyName }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrId: {
@@ -609,15 +632,18 @@ export class PacketProcessor {
                     if (name) {
                         logger.info(`Found monster name ${name} for id ${enemyUid}`);
                         userDataManager.enemyCache.name.set(enemyUid, name);
+                        try { userDataManager.addEvent('enemy_attr.name_id', { uid: enemyUid, name, attrId }); } catch (_) {}
                     }
                     break;
                 }
                 case AttrType.AttrHp: {
                     userDataManager.enemyCache.hp.set(enemyUid, reader.int32());
+                     try { userDataManager.addEvent('enemy_attr.hp', { uid: enemyUid }); } catch (_) {}
                     break;
                 }
                 case AttrType.AttrMaxHp: {
                     userDataManager.enemyCache.maxHp.set(enemyUid, reader.int32());
+                    try { userDataManager.addEvent('enemy_attr.max_hp', { uid: enemyUid }); } catch (_) {}
                     break;
                 }
             }
@@ -636,6 +662,7 @@ export class PacketProcessor {
             }
             const entityUid = entityUuid.shiftRight(16).toNumber();
             const attrCollection = entity.Attrs;
+            try { userDataManager.addEvent('entity_appear', { uid: entityUid, entType: entity.EntType }); } catch (_) {}
             if (attrCollection && attrCollection.Attrs) {
                 switch (entity.EntType) {
                     case pb.EEntityType.EntMonster: {

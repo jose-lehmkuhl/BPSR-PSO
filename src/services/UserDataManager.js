@@ -51,6 +51,9 @@ class UserDataManager {
 
         // Front-triggered clear flag (handled in checkTimeoutClear on next event)
         this.forceClearRequested = false;
+
+        // Scene-session mode: when enabled, encounters roll only on scene changes
+        this.sceneSessionMode = true;
     }
 
     // New: Method to remove users who have not been updated in 60 seconds
@@ -195,6 +198,25 @@ class UserDataManager {
             logger.error('Failed to save log:', error);
         }
         this.logLock.release();
+    }
+
+    async addEvent(type, data) {
+        if (config.IS_PAUSED) return;
+        const logDir = path.join('./logs', String(this.startTime));
+        const eventsFile = path.join(logDir, 'events.ndjson');
+        const entry = { ts: Date.now(), type, ...({ data }) };
+        await this.logLock.acquire();
+        try {
+            if (!this.logDirExist.has(logDir)) {
+                try { await fsPromises.access(logDir); } catch (_) { await fsPromises.mkdir(logDir, { recursive: true }); }
+                this.logDirExist.add(logDir);
+            }
+            await fsPromises.appendFile(eventsFile, JSON.stringify(entry) + '\n', 'utf8');
+        } catch (error) {
+            logger.error('Failed to save event:', error);
+        }
+        this.logLock.release();
+        this.lastLogTime = Date.now();
     }
 
     setProfession(uid, profession) {
@@ -486,6 +508,8 @@ class UserDataManager {
     }
 
     checkTimeoutClear() {
+        // When scene-session mode is enabled, do not auto-clear by OOC timer
+        if (this.sceneSessionMode) return;
         const thresholdSec = config.GLOBAL_SETTINGS.outOfCombatClearSeconds || 0;
         // If front requested a clear, honor it immediately on next event
         if (this.forceClearRequested) {

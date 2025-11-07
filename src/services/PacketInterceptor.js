@@ -12,7 +12,7 @@ const Cap = cap.Cap;
 const decoders = cap.decoders;
 const PROTOCOL = decoders.PROTOCOL;
 
-const clearDataOnServerChange = () => {
+            const clearDataOnServerChange = () => {
     if (!globalSettings.autoClearOnServerChange) return;
     // Arm a clear on the next incoming combat packet so the new encounter
     // starts exactly at the first event after map/server change
@@ -175,6 +175,7 @@ export class PacketInterceptor {
                                             current_server = src_server;
                                             clearTcpCache();
                                             tcp_next_seq = tcpPacket.info.seqno + buf.length;
+                                            try { userDataManager.addEvent('scene_change', { server: src_server }); } catch (_) {}
                                             clearDataOnServerChange();
                                             logger.info('Got Scene Server Address: ' + src_server);
                                         }
@@ -194,6 +195,7 @@ export class PacketInterceptor {
                                         current_server = src_server;
                                         clearTcpCache();
                                         tcp_next_seq = tcpPacket.info.seqno + buf.length;
+                                        try { userDataManager.addEvent('scene_change', { server: src_server }); } catch (_) {}
                                         clearDataOnServerChange();
                                         logger.info('Got Scene Server Address by Login Return Packet: ' + src_server);
                                     }
