@@ -219,6 +219,24 @@ class UserDataManager {
         this.lastLogTime = Date.now();
     }
 
+    async addRawPacket(meta, buffer) {
+        if (!buffer || buffer.length === 0) return;
+        const logDir = path.join('./logs', String(this.startTime));
+        const rawFile = path.join(logDir, 'raw.ndjson');
+        const entry = { ts: Date.now(), ...(meta || {}), data_b64: buffer.toString('base64') };
+        await this.logLock.acquire();
+        try {
+            if (!this.logDirExist.has(logDir)) {
+                try { await fsPromises.access(logDir); } catch (_) { await fsPromises.mkdir(logDir, { recursive: true }); }
+                this.logDirExist.add(logDir);
+            }
+            await fsPromises.appendFile(rawFile, JSON.stringify(entry) + '\n', 'utf8');
+        } catch (error) {
+            logger.error('Failed to save raw packet:', error);
+        }
+        this.logLock.release();
+    }
+
     setProfession(uid, profession) {
         const user = this.getUser(uid);
         if (user.profession !== profession) {
@@ -508,16 +526,16 @@ class UserDataManager {
     }
 
     checkTimeoutClear() {
-        // When scene-session mode is enabled, do not auto-clear by OOC timer
-        if (this.sceneSessionMode) return;
-        const thresholdSec = config.GLOBAL_SETTINGS.outOfCombatClearSeconds || 0;
-        // If front requested a clear, honor it immediately on next event
+        // If front requested a clear (e.g., on scene change), honor immediately
         if (this.forceClearRequested) {
             this.forceClearRequested = false;
             this.clearAll();
             logger.info('Front-requested clear executed.');
             return;
         }
+        // When scene-session mode is enabled, do not auto-clear by OOC timer
+        if (this.sceneSessionMode) return;
+        const thresholdSec = config.GLOBAL_SETTINGS.outOfCombatClearSeconds || 0;
         if (!thresholdSec || this.lastLogTime === 0 || this.users.size === 0) return;
         const currentTime = Date.now();
         if (this.lastLogTime && currentTime - this.lastLogTime > thresholdSec * 1000) {

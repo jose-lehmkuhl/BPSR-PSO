@@ -239,6 +239,7 @@ export class PacketInterceptor {
                         if (_data.length >= packetSize) {
                             const packet = _data.subarray(0, packetSize);
                             _data = _data.subarray(packetSize);
+                            try { userDataManager.addRawPacket({ kind: 'app_packet', server: current_server }, packet); } catch (_) {}
                             const processor = new PacketProcessor();
                             processor.processPacket(packet);
                         }
