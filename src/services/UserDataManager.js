@@ -49,8 +49,7 @@ class UserDataManager {
             this.cleanUpInactiveUsers();
         }, 30 * 1000);
 
-        // Per-user DPS time series (recorded once per second)
-        this.userDpsSeries = new Map(); // uid -> [{ x: sec, y: dps }]
+        // Removed: per-user DPS time series (no longer recorded)
 
         // Front-triggered clear flag (handled in checkTimeoutClear on next event)
         this.forceClearRequested = false;
@@ -417,24 +416,12 @@ class UserDataManager {
         const secFromStart = Math.max(0, Math.floor((now - this.startTime) / 1000));
         for (const user of this.users.values()) {
             user.updateRealtimeDps();
-            const uid = user.uid;
-            const dps = user.damageStats?.realtimeStats?.value || 0;
-            if (!this.userDpsSeries.has(uid)) this.userDpsSeries.set(uid, []);
-            const series = this.userDpsSeries.get(uid);
-            const last = series.length ? series[series.length - 1] : null;
-            if (!last || last.x !== secFromStart) {
-                series.push({ x: secFromStart, y: dps });
-                if (series.length > 3 * 3600) series.shift();
-            } else {
-                last.y = dps;
-            }
         }
     }
 
     getUserSkillData(uid) {
         const user = this.users.get(uid);
         if (!user) return null;
-        const dSeries = Array.isArray(this.userDpsSeries.get(uid)) ? this.userDpsSeries.get(uid) : [];
         return {
             uid: user.uid,
             name: user.name,
@@ -442,7 +429,6 @@ class UserDataManager {
             total_dps: user.getTotalDps(),
             skills: user.getSkillSummary(),
             attr: user.attr,
-            dps_series: dSeries,
         };
     }
 
@@ -496,7 +482,6 @@ class UserDataManager {
         } catch (_) {}
         this.users = new Map();
         this.refreshEnemyCache();
-        if (this.userDpsSeries && this.userDpsSeries.clear) this.userDpsSeries.clear();
         this.startTime = Date.now();
         this.lastAutoSaveTime = 0;
         this.lastLogTime = 0;
@@ -505,16 +490,12 @@ class UserDataManager {
     async clearAll() {
         // Prevent addLog from writing to the wrong folder during rollover
         await this.logLock.acquire();
-        let usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot, battleSectionsSnapshot;
+        let usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, battleSectionsSnapshot;
         try {
             usersToSave = this.users;
             saveStartTime = this.startTime;
             enemiesNameSnapshot = new Map(this.enemyCache.name);
             enemiesTakenSnapshot = new Map(this.enemiesTaken);
-            dpsSeriesSnapshot = new Map();
-            for (const [uid, arr] of this.userDpsSeries.entries()) {
-                dpsSeriesSnapshot.set(uid, Array.isArray(arr) ? arr.slice() : []);
-            }
             // Finalize any open battle section before rollover
             battleSectionsSnapshot = Array.isArray(this.battleSections) ? this.battleSections.slice() : [];
             if (this.currentBattleStartTs != null) {
@@ -529,7 +510,6 @@ class UserDataManager {
             this.lastAutoSaveTime = 0;
             this.lastLogTime = 0;
             this.refreshEnemyCache();
-            this.userDpsSeries.clear();
             // Reset battle section state for new scene
             this.battleSections = [];
             this.currentBattleStartTs = null;
@@ -538,7 +518,7 @@ class UserDataManager {
             this.logLock.release();
         }
         // Persist previous encounter outside the lock, then prune old logs with no damage
-        await this.saveAllUserData(usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot, battleSectionsSnapshot);
+        await this.saveAllUserData(usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, battleSectionsSnapshot);
         try { await this._pruneNoDamageLogs(); } catch (_) {}
     }
 
@@ -566,7 +546,7 @@ class UserDataManager {
         return Array.from(this.users.keys());
     }
 
-    async saveAllUserData(usersToSave = null, startTime = null, enemiesNameSnapshot = null, enemiesTakenSnapshot = null, dpsSeriesSnapshot = null, battleSectionsSnapshot = null) {
+    async saveAllUserData(usersToSave = null, startTime = null, enemiesNameSnapshot = null, enemiesTakenSnapshot = null, battleSectionsSnapshot = null) {
         try {
             const endTime = Date.now();
             const users = usersToSave || this.users;
@@ -599,7 +579,6 @@ class UserDataManager {
                     total_dps: Number.isFinite(dpsCombat) ? dpsCombat : 0,
                     skills: user.getSkillSummary(),
                     attr: user.attr,
-                    dps_series: Array.isArray((dpsSeriesSnapshot || this.userDpsSeries).get(uid)) ? (dpsSeriesSnapshot || this.userDpsSeries).get(uid) : [],
                 };
                 userDatas.set(uid, userData);
             }
