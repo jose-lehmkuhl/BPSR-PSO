@@ -57,6 +57,12 @@ class UserDataManager {
 
         // Heuristic window for scene-change inference via entity Appear bursts
         this.appearWindow = { count: 0, startTs: 0 };
+
+        // Battle section tracking (scene-scoped)
+        this.battleIdleMs = 5000;
+        this.battleSections = [];
+        this.currentBattleStartTs = null;
+        this.lastDamageTs = 0;
     }
 
     // New: Method to remove users who have not been updated in 60 seconds
@@ -207,6 +213,33 @@ class UserDataManager {
         if (config.IS_PAUSED) return;
         const logDir = path.join('./logs', String(this.startTime));
         const eventsFile = path.join(logDir, 'events.ndjson');
+        const nowTs = Date.now();
+
+        // Close an open battle section if we've been idle for >= battleIdleMs
+        if (this.currentBattleStartTs != null && this.lastDamageTs > 0) {
+            if (nowTs - this.lastDamageTs >= this.battleIdleMs) {
+                const endTs = Math.min(nowTs, this.lastDamageTs + this.battleIdleMs);
+                const section = { start: this.currentBattleStartTs, end: endTs };
+                this.battleSections.push(section);
+                await this._writeEvent(eventsFile, logDir, 'battle_section_close', { start: section.start, end: section.end, durationMs: section.end - section.start });
+                this.currentBattleStartTs = null;
+            }
+        }
+
+        // On damage events, open or extend a battle section
+        if (type === 'damage') {
+            if (this.currentBattleStartTs == null) {
+                this.currentBattleStartTs = nowTs;
+                await this._writeEvent(eventsFile, logDir, 'battle_section_open', { start: nowTs });
+            }
+            this.lastDamageTs = nowTs;
+        }
+
+        await this._writeEvent(eventsFile, logDir, type, data);
+        this.lastLogTime = nowTs;
+    }
+
+    async _writeEvent(eventsFile, logDir, type, data) {
         const entry = { ts: Date.now(), type, ...({ data }) };
         await this.logLock.acquire();
         try {
@@ -219,7 +252,6 @@ class UserDataManager {
             logger.error('Failed to save event:', error);
         }
         this.logLock.release();
-        this.lastLogTime = Date.now();
     }
 
     async addRawPacket(meta, buffer) {
@@ -419,7 +451,7 @@ class UserDataManager {
     async clearAll() {
         // Prevent addLog from writing to the wrong folder during rollover
         await this.logLock.acquire();
-        let usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot;
+        let usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot, battleSectionsSnapshot;
         try {
             usersToSave = this.users;
             saveStartTime = this.startTime;
@@ -429,6 +461,13 @@ class UserDataManager {
             for (const [uid, arr] of this.userDpsSeries.entries()) {
                 dpsSeriesSnapshot.set(uid, Array.isArray(arr) ? arr.slice() : []);
             }
+            // Finalize any open battle section before rollover
+            battleSectionsSnapshot = Array.isArray(this.battleSections) ? this.battleSections.slice() : [];
+            if (this.currentBattleStartTs != null) {
+                const endTs = this.lastDamageTs > 0 ? (this.lastDamageTs + this.battleIdleMs) : Date.now();
+                const section = { start: this.currentBattleStartTs, end: endTs };
+                battleSectionsSnapshot.push(section);
+            }
             // Switch to a fresh encounter immediately so subsequent logs go to a new folder
             this.users = new Map();
             this.startTime = Date.now();
@@ -436,11 +475,15 @@ class UserDataManager {
             this.lastLogTime = 0;
             this.refreshEnemyCache();
             this.userDpsSeries.clear();
+            // Reset battle section state for new scene
+            this.battleSections = [];
+            this.currentBattleStartTs = null;
+            this.lastDamageTs = 0;
         } finally {
             this.logLock.release();
         }
         // Persist previous encounter outside the lock
-        this.saveAllUserData(usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot);
+        this.saveAllUserData(usersToSave, saveStartTime, enemiesNameSnapshot, enemiesTakenSnapshot, dpsSeriesSnapshot, battleSectionsSnapshot);
     }
 
     clearIdentities() {
@@ -467,7 +510,7 @@ class UserDataManager {
         return Array.from(this.users.keys());
     }
 
-    async saveAllUserData(usersToSave = null, startTime = null, enemiesNameSnapshot = null, enemiesTakenSnapshot = null, dpsSeriesSnapshot = null) {
+    async saveAllUserData(usersToSave = null, startTime = null, enemiesNameSnapshot = null, enemiesTakenSnapshot = null, dpsSeriesSnapshot = null, battleSectionsSnapshot = null) {
         try {
             const endTime = Date.now();
             const users = usersToSave || this.users;
@@ -530,6 +573,10 @@ class UserDataManager {
                 }
                 const mm = String(Math.floor((summary.duration || 0) / 60000)).padStart(2, '0');
                 const ss = String(Math.floor(((summary.duration || 0) % 60000) / 1000)).padStart(2, '0');
+                // Compute combat sections and total combat time
+                const sections = Array.isArray(battleSectionsSnapshot) ? battleSectionsSnapshot : [];
+                const combatTimeMs = sections.reduce((acc, s) => acc + Math.max(0, (s.end || 0) - (s.start || 0)), 0);
+
                 const meta = {
                     name: topName,
                     targetCount: (enemiesTakenSnapshot ? enemiesTakenSnapshot.size : this.enemiesTaken.size),
@@ -537,6 +584,8 @@ class UserDataManager {
                     startTime: summary.startTime,
                     endTime: summary.endTime,
                     label: `${topName || 'Encounter'}(${enemiesTakenSnapshot ? enemiesTakenSnapshot.size : this.enemiesTaken.size}) [${mm}:${ss}]`,
+                    combatSections: sections,
+                    combatTimeMs,
                 };
                 await fsPromises.writeFile(path.join(logDir, 'encounter_meta.json'), JSON.stringify(meta, null, 2), 'utf8');
 
