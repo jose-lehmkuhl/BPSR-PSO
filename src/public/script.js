@@ -105,6 +105,10 @@ function formatNumber(num) {
 
 function getCurrentEncounterSeconds() {
     if (currentEncounter !== 'current') return null;
+    if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer >= 0) {
+        return Math.max(1, Math.floor(combatTimeMsFromServer / 1000));
+    }
+    // Fallback to client-side heuristic if server field missing
     const now = Date.now();
     const oocMs = (typeof combatIdleMsFromServer === 'number' && combatIdleMsFromServer > 0)
         ? combatIdleMsFromServer
@@ -333,11 +337,11 @@ function processDataUpdate(data) {
     }
 
     // Use server-provided timing for accurate fight window
-    if (data.fightStartTime) {
+    // Only apply scene start when server doesn't provide combat time (avoid using map time)
+    if (typeof combatTimeMsFromServer !== 'number' && data.fightStartTime) {
         if (fightStartTs !== data.fightStartTime) {
             lastKnownFightStart = fightStartTs || 0;
             fightStartTs = data.fightStartTime;
-            // On new fight (server-side clear), refresh encounter labels shortly
             if (currentEncounter === 'current') {
                 setTimeout(() => { if (window.refreshEncounters) window.refreshEncounters(); }, 700);
             }
@@ -469,8 +473,11 @@ function openBreakdown(user) {
         const data = resp.data;
         const skills = data.skills || {};
         const totalSum = Object.values(skills).reduce((s, v)=> s + (v.totalDamage||0), 0) || 1;
-        const activeSeconds = isHistorical ? (historicalEncounterSeconds || 1)
-            : Math.max(1, Math.floor((lastCombatTs && fightStartTs) ? (Math.max(0, Date.now() - fightStartTs)/1000) : 1));
+        const activeSeconds = isHistorical
+            ? (historicalEncounterSeconds || 1)
+            : Math.max(1, Math.floor(((typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer >= 0)
+                ? combatTimeMsFromServer
+                : (lastCombatTs && fightStartTs ? Math.max(0, Date.now() - fightStartTs) : 0)) / 1000));
         const rows = Object.entries(skills).map(([sid, s]) => {
             const total = s.totalDamage || 0;
             const dps = total / activeSeconds;
@@ -597,12 +604,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (fightTimerEl) fightTimerEl.textContent = '00:00';
             return;
         }
-        const sinceLast = now - lastCombatTs;
+        // Prefer server-provided combat time to display the timer
         let showMs;
-        if (sinceLast < oocMs) {
-            showMs = Math.max(0, now - fightStartTs);
+        if (typeof combatTimeMsFromServer === 'number' && combatTimeMsFromServer >= 0) {
+            showMs = combatTimeMsFromServer;
         } else {
-            showMs = Math.max(0, lastCombatTs - fightStartTs); // subtract OOC window implicitly
+            const sinceLast = now - lastCombatTs;
+            if (sinceLast < oocMs) {
+                showMs = Math.max(0, now - fightStartTs);
+            } else {
+                showMs = Math.max(0, lastCombatTs - fightStartTs);
+            }
         }
         const mm = String(Math.floor(showMs / 60000)).padStart(2, '0');
         const ss = String(Math.floor((showMs % 60000) / 1000)).padStart(2, '0');
