@@ -584,8 +584,8 @@ function openBreakdown(user) {
         const skillEntries = Object.entries(skills)
             .filter(([sid, s]) => {
                 const t = (s?.type || '').toString();
-                if (isHpsMode) return t && t !== '伤害'; // include healing-type rows
-                return t === '伤害' || t === ''; // default DPS rows
+                if (isHpsMode) return t === '治疗';
+                return t === '伤害';
             });
         const totalSum = skillEntries.reduce((s, [_, v])=> s + (v.totalDamage||0), 0) || 1;
         const activeSeconds = isHistorical
