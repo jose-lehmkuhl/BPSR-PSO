@@ -655,6 +655,7 @@ export class PacketProcessor {
         if (!syncNearEntities.Appear) {
             return;
         }
+        try { userDataManager.recordAppearBatch(syncNearEntities.Appear.length || 0); } catch (_) {}
         for (const entity of syncNearEntities.Appear) {
             const entityUuid = entity.Uuid;
             if (!entityUuid) {
@@ -690,6 +691,7 @@ export class PacketProcessor {
         if (isZstdCompressed) {
             msgPayload = this._decompressPayload(msgPayload);
         }
+        try { userDataManager.addEvent('notify', { methodId }); } catch (_) {}
         switch (methodId) {
             case NotifyMethod.SyncNearEntities: {
                 this._processSyncNearEntities(msgPayload);

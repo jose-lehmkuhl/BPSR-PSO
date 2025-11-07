@@ -14,9 +14,14 @@ const PROTOCOL = decoders.PROTOCOL;
 
             const clearDataOnServerChange = () => {
     if (!globalSettings.autoClearOnServerChange) return;
-    // Arm a clear on the next incoming combat packet so the new encounter
-    // starts exactly at the first event after map/server change
-    try { userDataManager.requestClear(); } catch (_) {}
+                // In scene-session mode, roll immediately; otherwise arm for next combat event
+                try {
+                    if (userDataManager.sceneSessionMode) {
+                        userDataManager.clearAll();
+                    } else {
+                        userDataManager.requestClear();
+                    }
+                } catch (_) {}
     logger.info('Server changed, clear requested on next packet.');
 };
 

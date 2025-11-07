@@ -54,6 +54,9 @@ class UserDataManager {
 
         // Scene-session mode: when enabled, encounters roll only on scene changes
         this.sceneSessionMode = true;
+
+        // Heuristic window for scene-change inference via entity Appear bursts
+        this.appearWindow = { count: 0, startTs: 0 };
     }
 
     // New: Method to remove users who have not been updated in 60 seconds
@@ -235,6 +238,33 @@ class UserDataManager {
             logger.error('Failed to save raw packet:', error);
         }
         this.logLock.release();
+    }
+
+    // Heuristic: large bursts of entity Appear within a short window imply map/scene load
+    recordAppearBatch(count) {
+        const now = Date.now();
+        const WINDOW_MS = 2000;
+        const INSTANT_THRESHOLD = 40; // single packet
+        const CUMULATIVE_THRESHOLD = 80; // within window
+        if (!count || count <= 0) return;
+        if (!this.appearWindow.startTs || (now - this.appearWindow.startTs) > WINDOW_MS) {
+            this.appearWindow.startTs = now;
+            this.appearWindow.count = 0;
+        }
+        this.appearWindow.count += count;
+        const trigger = (count >= INSTANT_THRESHOLD) || (this.appearWindow.count >= CUMULATIVE_THRESHOLD);
+        if (trigger) {
+            try { this.addEvent('scene_change_inferred', { reason: 'appear_burst', instant: count, windowCount: this.appearWindow.count }); } catch (_) {}
+            // In scene-session mode, roll immediately
+            if (this.sceneSessionMode) {
+                this.clearAll();
+            } else {
+                this.requestClear();
+            }
+            // reset window to avoid multiple triggers
+            this.appearWindow.startTs = now;
+            this.appearWindow.count = 0;
+        }
     }
 
     setProfession(uid, profession) {
