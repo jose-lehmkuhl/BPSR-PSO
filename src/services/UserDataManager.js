@@ -251,8 +251,8 @@ class UserDataManager {
             }
         }
 
-        // On damage events, open or extend a battle section
-        if (type === 'damage') {
+        // On damage given or received events, open or extend a battle section
+        if (type === 'damage' || type === 'taken_damage') {
             if (this.currentBattleStartTs == null) {
                 this.currentBattleStartTs = nowTs;
                 await this._writeEvent(eventsFile, logDir, 'battle_section_open', { start: nowTs });
