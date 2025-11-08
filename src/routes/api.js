@@ -18,6 +18,25 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
     // Middleware to parse JSON requests
     router.use(express.json());
 
+    // Skill names mapping (for client-side display of skill IDs)
+    router.get('/skill-names', async (req, res) => {
+        try {
+            // Attempt to read bundled table; fallback to empty map if missing
+            const tablePath = path.join(process.cwd(), 'src', 'tables', 'skill_names.json');
+            let data = {};
+            try {
+                const raw = await fsPromises.readFile(tablePath, 'utf8');
+                data = JSON.parse(raw || '{}') || {};
+            } catch (_) {
+                data = {};
+            }
+            res.json({ code: 0, data });
+        } catch (e) {
+            logger.error('Failed to read skill_names.json', e);
+            res.status(500).json({ code: 1, msg: 'Failed to load skill names' });
+        }
+    });
+
     // GET all user data
     router.get('/data', (req, res) => {
         const userData = userDataManager.getAllUsersData();

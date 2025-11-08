@@ -82,6 +82,13 @@ async function renderInlineSkills(user, modeOverride) {
         const resp = await r.json();
         const data = resp?.data || {};
         const skills = data.skills || {};
+        if (!skillNameMap) {
+            try {
+                const nr = await fetch(`/api/skill-names`);
+                const njs = await nr.json();
+                if (njs && njs.data) skillNameMap = njs.data;
+            } catch {}
+        }
         const currentMode = modeOverride || rankingMode;
         const isHpsMode = (currentMode === 'hps');
         const skillEntries = Object.entries(skills)
@@ -91,7 +98,11 @@ async function renderInlineSkills(user, modeOverride) {
                 if (isHpsMode) return t === '治疗' || (Number.isFinite(sidNum) && sidNum >= 1000000000);
                 return t === '伤害' || (Number.isFinite(sidNum) && sidNum < 1000000000);
             })
-            .map(([sid, s])=>({ id: sid, name: s.displayName ?? sid, total: s.totalDamage||0, count: s.totalCount||0, critRate: (s.critRate!=null?s.critRate: ((s.totalCount||0)?(s.critCount||0)/(s.totalCount||0):0)) }));
+            .map(([sid, s])=>{
+                const rawName = (s.displayName ?? sid);
+                const mapped = (skillNameMap && skillNameMap[String(sid)]) ? skillNameMap[String(sid)] : rawName;
+                return { id: sid, name: mapped, total: s.totalDamage||0, count: s.totalCount||0, critRate: (s.critRate!=null?s.critRate: ((s.totalCount||0)?(s.critCount||0)/(s.totalCount||0):0)) };
+            });
         const totalSum = skillEntries.reduce((s, v)=> s + v.total, 0);
         const encSec = (currentEncounter === 'current') ? (getCurrentEncounterSeconds() || 1) : (historicalEncounterSeconds || 1);
         const top = Math.max(1, ...skillEntries.map(e=>e.total));
@@ -106,11 +117,15 @@ async function renderInlineSkills(user, modeOverride) {
         columnsContainer.appendChild(hdr);
         const list = document.createElement('ul');
         list.className = 'data-list';
+        list.style.padding = '0';
+        list.style.margin = '0';
+        list.style.listStyle = 'none';
         for (const e of skillEntries.sort((a,b)=> b.total - a.total)) {
             const percent = top > 0 ? (e.total / top) * 100 : 0;
             const dps = (e.total || 0) / (encSec || 1);
             const item = document.createElement('li');
             item.className = 'data-item';
+            item.style.margin = '0 0 4px 0';
             const barFillColor = '#2563eb';
             item.innerHTML = `
                 <div class="main-bar" style="width: 100%;">
@@ -154,10 +169,14 @@ async function renderInlineNpc(enemyUid, enemyName) {
         const top = Math.max(1, ...items.map(i=>i.amount||0));
         const list = document.createElement('ul');
         list.className = 'data-list';
+        list.style.padding = '0';
+        list.style.margin = '0';
+        list.style.listStyle = 'none';
         for (const it of items.sort((a,b)=> b.amount - a.amount)) {
             const percent = top>0 ? (it.amount/top)*100 : 0;
             const item = document.createElement('li');
             item.className = 'data-item';
+            item.style.margin = '0 0 4px 0';
             item.innerHTML = `
                 <div class="main-bar" style="width: 100%;">
                     <div class="tanking-bar-fill" style="width: ${percent}%; background-color: rgba(255,0,0,0.5);"></div>
@@ -202,10 +221,14 @@ async function renderInlineTanking(user) {
         const top = Math.max(1, ...items.map(i=>i.amount||0));
         const list = document.createElement('ul');
         list.className = 'data-list';
+        list.style.padding = '0';
+        list.style.margin = '0';
+        list.style.listStyle = 'none';
         for (const it of items.sort((a,b)=> b.amount - a.amount)) {
             const percent = top>0 ? (it.amount/top)*100 : 0;
             const item = document.createElement('li');
             item.className = 'data-item';
+            item.style.margin = '0 0 4px 0';
             item.innerHTML = `
                 <div class="main-bar" style="width: 100%;">
                     <div class="tanking-bar-fill" style="width: ${percent}%; background-color: rgba(255,0,0,0.5);"></div>
@@ -250,8 +273,6 @@ let rankingMode = 'dps';
 const settingsContainer = document.getElementById('settingsContainer');
 const helpContainer = document.getElementById('helpContainer');
 const fightTimerEl = document.getElementById('fightTimer');
-const oocTimer = document.getElementById('oocTimer');
-const saveOocBtn = document.getElementById('saveOocBtn');
 const encounterSelect = document.getElementById('encounterSelect');
 const passthroughTitle = document.getElementById('passthroughTitle');
 const clearButton = document.getElementById('clearButton');
@@ -297,6 +318,7 @@ let lastSceneStartTs = 0;
 let currentInlineView = null; // { type: 'skills'|'npc'|'tanking', payload: {...} }
 let inlineBackBtn = null;
 let prevHeaderText = '';
+let skillNameMap = null;
 
 const SERVER_URL = window.location.host;
 
@@ -546,8 +568,8 @@ function updateAll() {
         const usersArray = Object.values(allUsers).filter((user) => (user.total_damage?.total||0) > 0 || (user.total_healing?.total||0) > 0 || (user.taken_damage||0)>0);
         renderDataList(usersArray);
         if (!currentInlineView) {
-            const encSec = getCurrentEncounterSeconds();
-            renderTotalBar(usersArray, encSec);
+            // const encSec = getCurrentEncounterSeconds();
+            // renderTotalBar(usersArray, encSec);
         } else {
             // ensure total-bar hidden in inline view
             const container = document.getElementById('totalBarContainer');
@@ -1038,31 +1060,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    // Load and save OOC timer
-    if (saveOocBtn && oocTimer) {
-        fetch(`/api/settings`).then((r) => r.json()).then((resp) => {
-            if (resp?.data?.outOfCombatClearSeconds != null) oocTimer.value = resp.data.outOfCombatClearSeconds;
-        }).catch(() => {});
-        saveOocBtn.addEventListener('click', async () => {
-            const seconds = Math.max(5, Math.min(600, parseInt(oocTimer.value || '15', 10)));
-            try {
-                await fetch(`/api/settings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ outOfCombatClearSeconds: seconds })
-                });
-                alert('Saved.');
-            } catch {}
-        });
-    }
+    // Removed OOC timer settings (scene-session mode controls resets)
 
     // Fight timer updater: counts while in combat; after OOC threshold, freezes at (lastCombatTs - fightStartTs)
     setInterval(() => {
         if (currentEncounter !== 'current') { if (fightTimerEl) fightTimerEl.textContent = '--:--'; return; }
         const now = Date.now();
-        const oocMs = (typeof combatIdleMsFromServer === 'number' && combatIdleMsFromServer > 0)
-            ? combatIdleMsFromServer
-            : (parseInt(oocTimer?.value || '15', 10) * 1000);
         if (!fightStartTs || !lastCombatTs) {
             if (fightTimerEl) fightTimerEl.textContent = '00:00';
             return;
