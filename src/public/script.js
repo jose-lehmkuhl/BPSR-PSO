@@ -24,6 +24,191 @@ function getNextColorShades() {
     return { dps: dpsColor, hps: hpsColor };
 }
 
+// Inline breakdown: header helpers and renderers
+function enterInlineHeader(titleText) {
+    try {
+        allButtons.forEach((b)=> b && b.classList && b.classList.add('hidden'));
+        if (serverStatus) {
+            prevHeaderText = serverStatus.textContent || '';
+            serverStatus.textContent = titleText || 'Breakdown';
+        }
+        if (!inlineBackBtn) {
+            inlineBackBtn = document.createElement('button');
+            inlineBackBtn.textContent = '← Back';
+            inlineBackBtn.style.marginLeft = '8px';
+            inlineBackBtn.onclick = ()=> {
+                currentInlineView = null;
+                exitInlineHeader();
+                updateAll();
+            };
+            if (serverStatus && serverStatus.parentElement) {
+                serverStatus.parentElement.appendChild(inlineBackBtn);
+            }
+        }
+        if (inlineBackBtn) inlineBackBtn.classList.remove('hidden');
+    } catch {}
+}
+
+function exitInlineHeader() {
+    try {
+        allButtons.forEach((b)=> b && b.classList && b.classList.remove('hidden'));
+        if (serverStatus) serverStatus.textContent = prevHeaderText || serverStatus.textContent;
+        if (inlineBackBtn) inlineBackBtn.classList.add('hidden');
+    } catch {}
+}
+
+async function renderInlineSkills(user, modeOverride) {
+    const uid = user.id;
+    const isHistorical = currentEncounter !== 'current';
+    let endpoint = `/api/skill/${uid}`;
+    if (isHistorical) {
+        const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
+        if (m) endpoint = `/api/history/${m[1]}/section/${m[2]}/skill/${uid}`;
+        else endpoint = `/api/history/${currentEncounter}/skill/${uid}`;
+    }
+    try {
+        const r = await fetch(endpoint);
+        const resp = await r.json();
+        const data = resp?.data || {};
+        const skills = data.skills || {};
+        const currentMode = modeOverride || rankingMode;
+        const isHpsMode = (currentMode === 'hps');
+        const skillEntries = Object.entries(skills)
+            .filter(([sid, s]) => {
+                const t = (s?.type || '').toString();
+                const sidNum = Number(sid);
+                if (isHpsMode) return t === '治疗' || (Number.isFinite(sidNum) && sidNum >= 1000000000);
+                return t === '伤害' || (Number.isFinite(sidNum) && sidNum < 1000000000);
+            })
+            .map(([sid, s])=>({ id: sid, name: s.displayName ?? sid, total: s.totalDamage||0, count: s.totalCount||0, critRate: (s.critRate!=null?s.critRate: ((s.totalCount||0)?(s.critCount||0)/(s.totalCount||0):0)) }));
+        const totalSum = skillEntries.reduce((s, v)=> s + v.total, 0);
+        const encSec = (currentEncounter === 'current') ? (getCurrentEncounterSeconds() || 1) : (historicalEncounterSeconds || 1);
+        const top = Math.max(1, ...skillEntries.map(e=>e.total));
+        const headerLeft = `${(data.name || ('#'+uid))}${data.profession?(' — '+data.profession):''}`;
+        const headerRight = `Active: ${encSec || 1}s  Total: ${formatNumber(totalSum)}`;
+        columnsContainer.innerHTML = '';
+        const hdr = document.createElement('div');
+        hdr.style.display = 'flex';
+        hdr.style.justifyContent = 'space-between';
+        hdr.style.margin = '6px 4px 10px';
+        hdr.innerHTML = `<div style="font-weight:600">${isHpsMode?'Healing':'Damage'} Breakdown — ${headerLeft}</div><div>${headerRight}</div>`;
+        columnsContainer.appendChild(hdr);
+        const list = document.createElement('ul');
+        list.className = 'data-list';
+        for (const e of skillEntries.sort((a,b)=> b.total - a.total)) {
+            const percent = top > 0 ? (e.total / top) * 100 : 0;
+            const dps = (e.total || 0) / (encSec || 1);
+            const item = document.createElement('li');
+            item.className = 'data-item';
+            const barFillColor = '#2563eb';
+            item.innerHTML = `
+                <div class="main-bar">
+                    <div class="dps-bar-fill" style="width: ${percent}%; background-color: ${barFillColor};"></div>
+                    <div class="content">
+                        <span class="name">${e.name}</span>
+                        <span class="stats">${formatNumber(e.total)} (${formatNumber(dps)} ${isHpsMode?'HPS':'DPS'}, ${(totalSum? (e.total/totalSum*100):0).toFixed(1)}%)</span>
+                    </div>
+                </div>
+            `;
+            list.appendChild(item);
+        }
+        columnsContainer.appendChild(list);
+    } catch {
+        columnsContainer.innerHTML = '<div style="margin:8px">Failed to load skills.</div>';
+    }
+}
+
+async function renderInlineNpc(enemyUid, enemyName) {
+    const isHistorical = currentEncounter !== 'current';
+    let endpoint = `/api/npc/${enemyUid}`;
+    if (isHistorical) {
+        const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
+        if (m) endpoint = `/api/history/${m[1]}/section/${m[2]}/npc/${enemyUid}`;
+        else endpoint = `/api/history/${currentEncounter}/npc/${enemyUid}`;
+    }
+    try {
+        const r = await fetch(endpoint);
+        const resp = await r.json();
+        const data = resp?.data || {};
+        const total = data.total || 0;
+        columnsContainer.innerHTML = '';
+        const hdr = document.createElement('div');
+        hdr.style.display = 'flex';
+        hdr.style.justifyContent = 'space-between';
+        hdr.style.margin = '6px 4px 10px';
+        hdr.innerHTML = `<div style="font-weight:600">NPC Breakdown — ${data.enemyName || enemyName || ('#'+enemyUid)}</div><div>Total: ${formatNumber(total)}</div>`;
+        columnsContainer.appendChild(hdr);
+        const items = Array.isArray(data.items)? data.items : [];
+        const top = Math.max(1, ...items.map(i=>i.amount||0));
+        const list = document.createElement('ul');
+        list.className = 'data-list';
+        for (const it of items.sort((a,b)=> b.amount - a.amount)) {
+            const percent = top>0 ? (it.amount/top)*100 : 0;
+            const item = document.createElement('li');
+            item.className = 'data-item';
+            item.innerHTML = `
+                <div class="main-bar">
+                    <div class="tanking-bar-fill" style="width: ${percent}%; background-color: rgba(255,0,0,0.5);"></div>
+                    <div class="content">
+                        <span class="name">${it.name || ('#'+it.attackerUid)}</span>
+                        <span class="stats">${formatNumber(it.amount)} (${((total? (it.amount/total*100):0).toFixed(1))}%)</span>
+                    </div>
+                </div>
+            `;
+            list.appendChild(item);
+        }
+        columnsContainer.appendChild(list);
+    } catch {
+        columnsContainer.innerHTML = '<div style="margin:8px">Failed to load NPC breakdown.</div>';
+    }
+}
+
+async function renderInlineTanking(user) {
+    const uid = user.id;
+    const isHistorical = currentEncounter !== 'current';
+    let endpoint = `/api/tanking/${uid}`;
+    if (isHistorical) {
+        const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
+        if (m) endpoint = `/api/history/${m[1]}/section/${m[2]}/tanking/${uid}`;
+        else endpoint = `/api/history/${currentEncounter}/tanking/${uid}`;
+    }
+    try {
+        const r = await fetch(endpoint);
+        const resp = await r.json();
+        const data = resp?.data || {};
+        const total = data.total || 0;
+        columnsContainer.innerHTML = '';
+        const hdr = document.createElement('div');
+        hdr.style.display = 'flex';
+        hdr.style.justifyContent = 'space-between';
+        hdr.style.margin = '6px 4px 10px';
+        const headerName = (user.name && user.name!=='...') ? user.name : ('#'+uid);
+        hdr.innerHTML = `<div style="font-weight:600">Tanking Breakdown — ${headerName}</div><div>Total: ${formatNumber(total)}</div>`;
+        columnsContainer.appendChild(hdr);
+        const items = Array.isArray(data.items)? data.items : [];
+        const top = Math.max(1, ...items.map(i=>i.amount||0));
+        const list = document.createElement('ul');
+        list.className = 'data-list';
+        for (const it of items.sort((a,b)=> b.amount - a.amount)) {
+            const percent = top>0 ? (it.amount/top)*100 : 0;
+            const item = document.createElement('li');
+            item.className = 'data-item';
+            item.innerHTML = `
+                <div class="main-bar">
+                    <div class="tanking-bar-fill" style="width: ${percent}%; background-color: rgba(255,0,0,0.5);"></div>
+                    <div class="content">
+                        <span class="name">${it.name || ('#'+it.attackerUid)}</span>
+                        <span class="stats">${formatNumber(it.amount)} (${((total? (it.amount/total*100):0).toFixed(1))}%)</span>
+                    </div>
+                </div>
+            `;
+            list.appendChild(item);
+        }
+        columnsContainer.appendChild(list);
+    } catch {
+        columnsContainer.innerHTML = '<div style="margin:8px">Failed to load Tanking breakdown.</div>';
+    }
+}
 // Fixed color per base class (single color used for both DPS/HPS)
 // High-contrast class colors against white text (AA compliant heuristics)
 const classColors = {
