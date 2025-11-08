@@ -96,6 +96,9 @@ let combatTimeMsFromServer = null;
 let combatClockFromServer = { start: 0, last: 0, idle: 5000 };
 let liveEncounterSeconds = 0; // monotonic combat seconds within the current scene
 let lastSceneStartTs = 0;
+let currentInlineView = null; // { type: 'skills'|'npc'|'tanking', payload: {...} }
+let inlineBackBtn = null;
+let prevHeaderText = '';
 
 const SERVER_URL = window.location.host;
 
@@ -147,6 +150,12 @@ function getCurrentEncounterSeconds() {
 }
 
 function renderDataList(users) {
+    // Inline breakdown view takes precedence
+    if (currentInlineView) {
+        if (currentInlineView.type === 'skills') return renderInlineSkills(currentInlineView.payload.user, currentInlineView.payload.mode);
+        if (currentInlineView.type === 'npc') return renderInlineNpc(currentInlineView.payload.enemyUid, currentInlineView.payload.enemyName);
+        if (currentInlineView.type === 'tanking') return renderInlineTanking(currentInlineView.payload.user);
+    }
     columnsContainer.innerHTML = '';
 
     const totalDamageOverall = users.reduce((sum, user) => sum + user.total_damage.total, 0);
@@ -244,23 +253,23 @@ function renderDataList(users) {
         item.addEventListener('click', () => {
             if (rankingMode === 'npc') return;
             if (rankingMode === 'tanking') {
-                openTankingBreakdown(user);
-                return;
+                currentInlineView = { type: 'tanking', payload: { user } };
+                enterInlineHeader('Tanking Breakdown');
+                updateAll(); return;
             }
-            const payload = { uid: user.id, timestamp: currentEncounter };
-            if (window?.electronAPI?.openBreakdown) {
-                window.electronAPI.openBreakdown(payload);
-                return;
-            }
-            // Fallback in-page modal
             const mode = item.dataset.mode || rankingMode;
-            openBreakdown(user, mode);
+            currentInlineView = { type: 'skills', payload: { user, mode } };
+            enterInlineHeader(`${mode==='hps'?'Healing':'Damage'} Breakdown`);
+            updateAll();
         });
         columnsContainer.appendChild(item);
     });
 }
 
 function renderNpcTankingList(enemies) {
+    if (currentInlineView && currentInlineView.type === 'npc') {
+        return renderInlineNpc(currentInlineView.payload.enemyUid, currentInlineView.payload.enemyName);
+    }
     columnsContainer.innerHTML = '';
     // Prefer aggregated taken_total; fallback to current HP loss
     const getTaken = (e) => (e.taken_total != null ? e.taken_total : Math.max(0, (e.max_hp || 0) - (e.hp || 0)));
@@ -284,7 +293,9 @@ function renderNpcTankingList(enemies) {
         `;
         // Open NPC breakdown (who hit this enemy and how much)
         item.addEventListener('click', () => {
-            openNpcBreakdown(e.id, displayName);
+            currentInlineView = { type: 'npc', payload: { enemyUid: e.id, enemyName: displayName } };
+            enterInlineHeader('NPC Breakdown');
+            updateAll();
         });
         columnsContainer.appendChild(item);
     });
