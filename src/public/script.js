@@ -1238,11 +1238,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else if (opt.textContent !== labelText) {
                             opt.textContent = labelText;
                         }
-                        // Append section entries for this scene (newest first)
+                        // Append section entries for this scene (newest first), grouped under its scene option
                         fetch(`/api/history/${ts}/analysis`).then(r=>r.json()).then(analysis=>{
                             if (!(analysis?.code === 0 && Array.isArray(analysis.data?.sections))) return;
                             const sceneName = analysis.data.sceneName || head || '';
                             const secs = analysis.data.sections.slice().sort((a,b)=> (b.end||0) - (a.end||0));
+                            let anchor = opt; // insert sections after this anchor (scene or last section)
                             for (let i = 0; i < secs.length; i++) {
                                 const s = secs[i];
                                 const val = `${ts}#sec:${s.index}`;
@@ -1256,10 +1257,21 @@ document.addEventListener('DOMContentLoaded', () => {
                                     secOpt = document.createElement('option');
                                     secOpt.value = val;
                                     secOpt.textContent = secLabel;
-                                    encounterSelect.appendChild(secOpt);
                                 } else if (secOpt.textContent !== secLabel) {
                                     secOpt.textContent = secLabel;
                                 }
+                                // Ensure it's positioned right after the current anchor
+                                if (secOpt.previousSibling !== anchor) {
+                                    if (secOpt.parentElement === encounterSelect) {
+                                        encounterSelect.removeChild(secOpt);
+                                    }
+                                    if (anchor && anchor.nextSibling) {
+                                        encounterSelect.insertBefore(secOpt, anchor.nextSibling);
+                                    } else {
+                                        encounterSelect.appendChild(secOpt);
+                                    }
+                                }
+                                anchor = secOpt;
                             }
                             // Restore selection if it changed unintentionally
                             if (encounterSelect.value !== selectedBefore && encounterSelect.querySelector(`option[value="${selectedBefore}"]`)) {
