@@ -1087,14 +1087,16 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             for (const line of lines) {
                 if (!line) continue;
                 let obj; try { obj = JSON.parse(line); } catch { continue; }
-                if (!obj || obj.type !== 'damage') continue;
+                if (!obj || (obj.type !== 'damage' && obj.type !== 'taken_damage')) continue;
                 const ts = Number(obj.ts || 0);
                 if (ts < s.start || ts > s.end) continue;
                 const d = obj.data || {};
                 if (Number(d.targetUid) !== targetEnemy) continue;
                 const attackerUid = Number(d.attackerUid);
                 if (!Number.isFinite(attackerUid)) continue;
-                const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
+                const val = (obj.type === 'damage')
+                    ? ((Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0)
+                    : (Number(d.value) || 0);
                 if (val <= 0) continue;
                 byAttacker.set(attackerUid, (byAttacker.get(attackerUid) || 0) + val);
             }
@@ -1121,6 +1123,12 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             const logDir = path.join('./logs', timestamp);
             const eventsPath = path.join(logDir, 'events.ndjson');
             const usersPath = path.join(logDir, 'allUserData.json');
+            const skillsPath = path.join(process.cwd(), 'src', 'tables', 'skill_names.json');
+            let skillNames = {};
+            try {
+                const rawS = await fsPromises.readFile(skillsPath, 'utf8');
+                skillNames = JSON.parse(rawS || '{}') || {};
+            } catch (_) {}
             let userName = `#${uid}`;
             let profession = '';
             let fightPoint = undefined;
@@ -1182,7 +1190,17 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 if (!sid) continue;
                 const val = (Number(d.hpLessen) > 0 ? Number(d.hpLessen) : Number(d.value)) || 0;
                 const isCrit = !!d.crit;
-                if (!skills[sid]) skills[sid] = { totalDamage: 0, totalCount: 0, critCount: 0, type: (obj.type === 'heal' ? '治疗' : '伤害'), displayName: sid };
+                if (!skills[sid]) {
+                    // Map display name from table (normalize healing ids >= 1e9 back to base)
+                    let displayName = sid;
+                    const sidNum = Number(sid);
+                    if (Number.isFinite(sidNum)) {
+                        const baseId = sidNum >= 1000000000 ? (sidNum - 1000000000) : sidNum;
+                        const mapped = skillNames[String(sid)] || skillNames[String(baseId)];
+                        if (typeof mapped === 'string') displayName = mapped;
+                    }
+                    skills[sid] = { totalDamage: 0, totalCount: 0, critCount: 0, type: (obj.type === 'heal' ? '治疗' : '伤害'), displayName };
+                }
                 skills[sid].totalDamage += val > 0 ? val : 0;
                 skills[sid].totalCount += 1;
                 if (isCrit) skills[sid].critCount += 1;
