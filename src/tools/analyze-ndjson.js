@@ -4,13 +4,17 @@ const path = require('path');
 
 function parseArgs() {
 	const args = process.argv.slice(2);
-	const out = { idle: 5000 };
+	const out = { idle: 5000, mode: 'report' };
 	for (let i = 0; i < args.length; i++) {
 		const a = args[i];
 		if (a === '--file' || a === '-f') out.file = args[++i];
 		else if (a === '--users') out.users = args[++i];
 		else if (a === '--enemies') out.enemies = args[++i];
 		else if (a === '--idle') out.idle = Number(args[++i]) || 5000;
+		else if (a === '--mode') out.mode = String(args[++i] || '').trim();
+		else if (a === '--section' || a === '-s') out.section = Number(args[++i]);
+		else if (a === '--uid') out.uid = Number(args[++i]);
+		else if (a === '--enemy' || a === '--enemyUid') out.enemyUid = Number(args[++i]);
 		else if (a === '--pretty') out.pretty = true;
 		else if (a === '--help' || a === '-h') out.help = true;
 	}
@@ -274,20 +278,330 @@ function resolveNames(report, usersJson, enemiesJson) {
 	return report;
 }
 
+function buildSections(lines, idleMs) {
+	const sections = [];
+	let currentOpenStart = null;
+	let lastDamageTs = -1;
+	let lastClosedEnd = -1;
+	for (const line of lines) {
+		if (!line) continue;
+		let obj; try { obj = JSON.parse(line); } catch { continue; }
+		if (!obj || !obj.type) continue;
+		const ts = Number(obj.ts || 0);
+		if (obj.type === 'battle_section_open') {
+			if (currentOpenStart == null) currentOpenStart = (Number(obj?.data?.start) || ts || Date.now());
+			continue;
+		}
+		if (obj.type === 'battle_section_close') {
+			const endTs = Number(obj?.data?.end) || ts || 0;
+			if (currentOpenStart != null && endTs >= currentOpenStart + idleMs && lastClosedEnd !== endTs) {
+				sections.push({ start: currentOpenStart, end: endTs });
+				lastClosedEnd = endTs;
+				currentOpenStart = null;
+			}
+			continue;
+		}
+		if (obj.type === 'damage' || obj.type === 'taken_damage') {
+			if (currentOpenStart == null) currentOpenStart = ts;
+			if (ts > lastDamageTs) lastDamageTs = ts;
+		}
+	}
+	if (currentOpenStart != null && lastDamageTs >= currentOpenStart && lastClosedEnd !== lastDamageTs) {
+		sections.push({ start: currentOpenStart, end: lastDamageTs });
+	}
+	return sections;
+}
+
+function within(ts, s) { return ts >= s.start && ts <= s.end; }
+
+function endpoint_analysis(lines, enemies, idleMs) {
+	const sections = buildSections(lines, idleMs);
+	// Per-section top enemy
+	const sectionsOut = sections.map((s, index) => {
+		const totals = {};
+		for (const line of lines) {
+			if (!line) continue;
+			let obj; try { obj = JSON.parse(line); } catch { continue; }
+			if (!obj || obj.type !== 'damage') continue;
+			const ts = Number(obj.ts || 0);
+			if (!within(ts, s)) continue;
+			const d = obj.data || {};
+			const tgt = Number(d.targetUid);
+			const val = valueFrom(d);
+			if (!Number.isFinite(tgt) || val <= 0) continue;
+			totals[tgt] = (totals[tgt] || 0) + val;
+		}
+		let topId = null, topVal = -1;
+		for (const [eidStr, tot] of Object.entries(totals)) {
+			const eid = Number(eidStr);
+			if (tot > topVal) { topVal = tot; topId = eid; }
+		}
+		return { index, start: s.start, end: s.end, durationMs: s.end - s.start, topEnemyId: topId, topEnemyName: enemies[String(topId)] || (topId != null ? `#${topId}` : '') };
+	});
+	// Scene name = longest section's top enemy
+	let sceneName = '';
+	if (sectionsOut.length) {
+		let longest = sectionsOut[0];
+		for (const sec of sectionsOut) if ((sec.durationMs||0) > (longest.durationMs||0)) longest = sec;
+		sceneName = longest.topEnemyName || '';
+	}
+	return { code: 0, data: { sections: sectionsOut, sceneName } };
+}
+
+function endpoint_scene_data(lines, users, enemies, idleMs) {
+	// Aggregate across whole scene
+	const userAgg = new Map(); // uid -> { name, total_damage:{total}, total_healing:{total}, taken_damage }
+	const enemiesAgg = new Map(); // enemyUid -> taken_total
+	for (const line of lines) {
+		if (!line) continue;
+		let obj; try { obj = JSON.parse(line); } catch { continue; }
+		if (!obj || !obj.type) continue;
+		const d = obj.data || {};
+		if (obj.type === 'damage') {
+			const attacker = Number(d.attackerUid);
+			const target = Number(d.targetUid);
+			const val = valueFrom(d);
+			if (Number.isFinite(attacker) && val > 0) {
+				const u = userAgg.get(attacker) || { name: users[String(attacker)]?.name || `#${attacker}`, total_damage:{ total:0 }, total_healing:{ total:0 }, taken_damage:0 };
+				u.total_damage.total += val;
+				userAgg.set(attacker, u);
+			}
+			if (Number.isFinite(target) && val > 0) {
+				enemiesAgg.set(target, (enemiesAgg.get(target) || 0) + val);
+			}
+		} else if (obj.type === 'heal') {
+			const attacker = Number(d.attackerUid);
+			const val = valueFrom(d);
+			if (Number.isFinite(attacker) && val > 0) {
+				const u = userAgg.get(attacker) || { name: users[String(attacker)]?.name || `#${attacker}`, total_damage:{ total:0 }, total_healing:{ total:0 }, taken_damage:0 };
+				u.total_healing.total += val;
+				userAgg.set(attacker, u);
+			}
+		} else if (obj.type === 'taken_damage') {
+			const victim = Number(d.targetUid);
+			const val = Number(d.value) || 0;
+			if (Number.isFinite(victim) && val > 0) {
+				const u = userAgg.get(victim) || { name: users[String(victim)]?.name || `#${victim}`, total_damage:{ total:0 }, total_healing:{ total:0 }, taken_damage:0 };
+				u.taken_damage += val;
+				userAgg.set(victim, u);
+			}
+		}
+	}
+	const userOut = {};
+	for (const [uid, u] of userAgg.entries()) {
+		const meta = users[String(uid)] || {};
+		const profession = typeof meta.profession === 'string' ? meta.profession : '';
+		const fightPoint = (meta?.attr && typeof meta.attr.fightPoint === 'number') ? meta.attr.fightPoint
+			: (typeof meta.fightPoint === 'number' ? meta.fightPoint : undefined);
+		userOut[String(uid)] = { name: u.name, profession, fightPoint, total_damage: u.total_damage, total_healing: u.total_healing, total_dps: 0, total_hps: 0, taken_damage: u.taken_damage };
+	}
+	const enemiesOut = {};
+	for (const [eid, total] of enemiesAgg.entries()) {
+		enemiesOut[String(eid)] = { id: eid, name: enemies[String(eid)] || `#${eid}`, taken_total: total };
+	}
+	return { code: 0, user: userOut, enemies: enemiesOut };
+}
+
+function endpoint_section_data(lines, users, enemies, idleMs, index) {
+	const secs = buildSections(lines, idleMs);
+	if (!(index >= 0 && index < secs.length)) return { code: 1, msg: 'Section not found' };
+	const s = secs[index];
+	const start = s.start, end = s.end;
+	const durationSec = Math.max(1, Math.floor((end - start) / 1000));
+	const userAgg = new Map();
+	const enemiesAgg = new Map();
+	for (const line of lines) {
+		if (!line) continue;
+		let obj; try { obj = JSON.parse(line); } catch { continue; }
+		if (!obj || !obj.type) continue;
+		const ts = Number(obj.ts || 0);
+		if (!(ts >= start && ts <= end)) continue;
+		const d = obj.data || {};
+		if (obj.type === 'damage') {
+			const attacker = Number(d.attackerUid);
+			const target = Number(d.targetUid);
+			const val = valueFrom(d);
+			if (Number.isFinite(attacker) && val > 0) {
+				const u = userAgg.get(attacker) || { name: users[String(attacker)]?.name || `#${attacker}`, total_damage:{ total:0 }, total_healing:{ total:0 }, taken_damage:0 };
+				u.total_damage.total += val;
+				userAgg.set(attacker, u);
+			}
+			if (Number.isFinite(target) && val > 0) enemiesAgg.set(target, (enemiesAgg.get(target) || 0) + val);
+		} else if (obj.type === 'heal') {
+			const attacker = Number(d.attackerUid);
+			const val = valueFrom(d);
+			if (Number.isFinite(attacker) && val > 0) {
+				const u = userAgg.get(attacker) || { name: users[String(attacker)]?.name || `#${attacker}`, total_damage:{ total:0 }, total_healing:{ total:0 }, taken_damage:0 };
+				u.total_healing.total += val;
+				userAgg.set(attacker, u);
+			}
+		} else if (obj.type === 'taken_damage') {
+			const victim = Number(d.targetUid);
+			const val = Number(d.value) || 0;
+			if (Number.isFinite(victim) && val > 0) {
+				const u = userAgg.get(victim) || { name: users[String(victim)]?.name || `#${victim}`, total_damage:{ total:0 }, total_healing:{ total:0 }, taken_damage:0 };
+				u.taken_damage += val;
+				userAgg.set(victim, u);
+			}
+		}
+	}
+	const userOut = {};
+	for (const [uid, u] of userAgg.entries()) {
+		const meta = users[String(uid)] || {};
+		const profession = typeof meta.profession === 'string' ? meta.profession : '';
+		const fightPoint = (meta?.attr && typeof meta.attr.fightPoint === 'number') ? meta.attr.fightPoint
+			: (typeof meta.fightPoint === 'number' ? meta.fightPoint : undefined);
+		userOut[String(uid)] = { name: u.name, profession, fightPoint, total_damage: u.total_damage, total_healing: u.total_healing, total_dps: (u.total_damage.total||0)/durationSec, total_hps: (u.total_healing.total||0)/durationSec, taken_damage: u.taken_damage };
+	}
+	const enemiesOut = {};
+	for (const [eid, total] of enemiesAgg.entries()) {
+		enemiesOut[String(eid)] = { id: eid, name: enemies[String(eid)] || `#${eid}`, taken_total: total };
+	}
+	return { code: 0, user: userOut, enemies: enemiesOut, durationSec };
+}
+
+function endpoint_npc(lines, users, enemies, idleMs, enemyUid, index) {
+	const secs = buildSections(lines, idleMs);
+	let filter = () => true;
+	if (Number.isFinite(index) && index >= 0 && index < secs.length) {
+		const s = secs[index];
+		filter = (ts) => within(ts, s);
+	}
+	const byAttacker = new Map();
+	for (const line of lines) {
+		if (!line) continue;
+		let obj; try { obj = JSON.parse(line); } catch { continue; }
+		if (!obj || obj.type !== 'damage') continue;
+		const ts = Number(obj.ts || 0);
+		if (!filter(ts)) continue;
+		const d = obj.data || {};
+		if (Number(d.targetUid) !== enemyUid) continue;
+		const attacker = Number(d.attackerUid);
+		const val = valueFrom(d);
+		if (!Number.isFinite(attacker) || val <= 0) continue;
+		byAttacker.set(attacker, (byAttacker.get(attacker) || 0) + val);
+	}
+	let total = 0;
+	const items = [];
+	for (const [attacker, amount] of byAttacker.entries()) {
+		total += amount;
+		const name = users[String(attacker)]?.name || `#${attacker}`;
+		items.push({ attackerUid: attacker, name, amount });
+	}
+	items.sort((a,b)=> b.amount - a.amount);
+	return { code: 0, data: { enemyUid, enemyName: enemies[String(enemyUid)] || `#${enemyUid}`, total, items } };
+}
+
+function endpoint_tanking(lines, users, enemies, idleMs, uid, index) {
+	const secs = buildSections(lines, idleMs);
+	let filter = () => true;
+	if (Number.isFinite(index) && index >= 0 && index < secs.length) {
+		const s = secs[index];
+		filter = (ts) => within(ts, s);
+	}
+	const byAttacker = new Map();
+	for (const line of lines) {
+		if (!line) continue;
+		let obj; try { obj = JSON.parse(line); } catch { continue; }
+		if (!obj || (obj.type !== 'damage' && obj.type !== 'taken_damage')) continue;
+		const ts = Number(obj.ts || 0);
+		if (!filter(ts)) continue;
+		const d = obj.data || {};
+		if (Number(d.targetUid) !== uid) continue;
+		const attacker = Number(d.attackerUid);
+		const val = obj.type === 'damage' ? valueFrom(d) : (Number(d.value) || 0);
+		if (!Number.isFinite(attacker) || val <= 0) continue;
+		byAttacker.set(attacker, (byAttacker.get(attacker) || 0) + val);
+	}
+	let total = 0;
+	const items = [];
+	for (const [attacker, amount] of byAttacker.entries()) {
+		total += amount;
+		const name = users[String(attacker)]?.name || `#${attacker}`;
+		items.push({ attackerUid: attacker, name, amount });
+	}
+	items.sort((a,b)=> b.amount - a.amount);
+	return { code: 0, data: { victimUid: uid, total, items } };
+}
+
+function endpoint_skill(lines, users, idleMs, uid, index) {
+	const secs = buildSections(lines, idleMs);
+	let filter = () => true;
+	if (Number.isFinite(index) && index >= 0 && index < secs.length) {
+		const s = secs[index];
+		filter = (ts) => within(ts, s);
+	}
+	const skills = {};
+	for (const line of lines) {
+		if (!line) continue;
+		let obj; try { obj = JSON.parse(line); } catch { continue; }
+		if (!obj || (obj.type !== 'damage' && obj.type !== 'heal')) continue;
+		const ts = Number(obj.ts || 0);
+		if (!filter(ts)) continue;
+		const d = obj.data || {};
+		const attacker = Number(d.attackerUid);
+		if (!Number.isFinite(attacker) || attacker !== uid) continue;
+		const sid = d.skillId != null ? String(d.skillId) : undefined;
+		if (!sid) continue;
+		const val = valueFrom(d);
+		const type = obj.type === 'heal' ? '治疗' : '伤害';
+		if (!skills[sid]) skills[sid] = { displayName: sid, type, totalDamage: 0, totalCount: 0, critCount: 0 };
+		skills[sid].totalDamage += val > 0 ? val : 0;
+		skills[sid].totalCount += 1;
+		if (d.crit) skills[sid].critCount += 1;
+	}
+	for (const sid of Object.keys(skills)) {
+		const s = skills[sid];
+		s.critRate = s.totalCount ? (s.critCount / s.totalCount) : 0;
+	}
+	const u = users[String(uid)] || {};
+	const name = typeof u.name === 'string' ? u.name : `#${uid}`;
+	const profession = typeof u.profession === 'string' ? u.profession : '';
+	const fightPoint = (u?.attr && typeof u.attr.fightPoint === 'number') ? u.attr.fightPoint : (typeof u.fightPoint === 'number' ? u.fightPoint : undefined);
+	const attr = (typeof fightPoint === 'number') ? { fightPoint } : undefined;
+	return { code: 0, data: { name, profession, fightPoint, ...(attr?{attr}:{}), skills } };
+}
+
 function main() {
 	const args = parseArgs();
 	if (args.help || !args.file) {
-		console.log('Usage: node src/tools/analyze-ndjson.js --file <path.ndjson> [--users <allUserData.json>] [--enemies <enemies.json>] [--idle 5000] [--pretty]');
+		console.log('Usage: node src/tools/analyze-ndjson.js --file <events.ndjson> [--users allUserData.json] [--enemies enemies.json] [--idle 5000] [--mode report|analysis|scene-data|section-data|npc|tanking|skill] [--section N] [--uid X] [--enemy Y] [--pretty]');
 		process.exit(args.file ? 0 : 1);
 	}
 	const filePath = path.resolve(args.file);
 	const raw = fs.readFileSync(filePath, 'utf8');
 	const lines = raw.split(/\r?\n/);
-	const base = analyze(lines, { idle: args.idle });
 	const users = loadJsonSafe(args.users);
 	const enemies = loadJsonSafe(args.enemies);
-	const report = resolveNames(base, users, enemies);
-	const out = args.pretty ? JSON.stringify(report, null, 2) : JSON.stringify(report);
+	let payload;
+	switch (args.mode) {
+		case 'analysis':
+			payload = endpoint_analysis(lines, enemies, args.idle);
+			break;
+		case 'scene-data':
+			payload = endpoint_scene_data(lines, users, enemies, args.idle);
+			break;
+		case 'section-data':
+			payload = endpoint_section_data(lines, users, enemies, args.idle, Number(args.section||0));
+			break;
+		case 'npc':
+			payload = endpoint_npc(lines, users, enemies, args.idle, Number(args.enemyUid), Number.isFinite(args.section)?Number(args.section):undefined);
+			break;
+		case 'tanking':
+			payload = endpoint_tanking(lines, users, enemies, args.idle, Number(args.uid), undefined);
+			break;
+		case 'skill':
+			payload = endpoint_skill(lines, users, args.idle, Number(args.uid), Number.isFinite(args.section)?Number(args.section):undefined);
+			break;
+		case 'report':
+		default: {
+			const base = analyze(lines, { idle: args.idle });
+			const report = resolveNames(base, users, enemies);
+			payload = report;
+			break;
+		}
+	}
+	const out = args.pretty ? JSON.stringify(payload, null, 2) : JSON.stringify(payload);
 	console.log(out);
 }
 

@@ -87,8 +87,17 @@
       window.electronAPI.onBreakdownLoad(async ({ uid, timestamp }) => {
         try{
           const isHist = !!timestamp && timestamp !== 'current';
-          const base = isHist ? `http://${SERVER_URL}/api/history/${timestamp}` : `http://${SERVER_URL}/api`;
-          const res = await fetch(`${base}/skill/${uid}`);
+          let skillUrl = `http://${SERVER_URL}/api/skill/${uid}`;
+          if (isHist) {
+            const m = String(timestamp).match(/^([0-9]+)#sec:(\d+)$/);
+            if (m) {
+              const ts = m[1], idx = m[2];
+              skillUrl = `http://${SERVER_URL}/api/history/${ts}/section/${idx}/skill/${uid}`;
+            } else {
+              skillUrl = `http://${SERVER_URL}/api/history/${timestamp}/skill/${uid}`;
+            }
+          }
+          const res = await fetch(skillUrl);
           const js = await res.json();
           if(!(js && js.code===0 && js.data)) return;
           const d = js.data;
