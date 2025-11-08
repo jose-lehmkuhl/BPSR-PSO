@@ -18,6 +18,30 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
     // Middleware to parse JSON requests
     router.use(express.json());
 
+    // Helper to map skill display names using table
+    async function mapSkillDisplayNames(skillsObj) {
+        try {
+            const skillsPath = path.join(process.cwd(), 'src', 'tables', 'skill_names.json');
+            const rawS = await fsPromises.readFile(skillsPath, 'utf8');
+            const skillNames = JSON.parse(rawS || '{}') || {};
+            for (const sid of Object.keys(skillsObj || {})) {
+                const entry = skillsObj[sid];
+                if (!entry) continue;
+                let disp = entry.displayName ?? sid;
+                const sidNum = Number(sid);
+                if (skillNames[String(sid)] != null) {
+                    disp = skillNames[String(sid)];
+                } else if (Number.isFinite(sidNum) && sidNum >= 1000000000 && skillNames[String(sidNum - 1000000000)] != null) {
+                    disp = skillNames[String(sidNum - 1000000000)];
+                }
+                entry.displayName = disp;
+            }
+        } catch (_) {
+            // ignore mapping failures
+        }
+        return skillsObj;
+    }
+
     // Skill names mapping (for client-side display of skill IDs)
     router.get('/skill-names', async (req, res) => {
         try {
@@ -45,6 +69,22 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
             user: userData,
         };
         res.json(data);
+    });
+
+    // Live skill breakdown for a user (current scene)
+    router.get('/skill/:uid', async (req, res) => {
+        try {
+            const { uid } = req.params;
+            const data = userDataManager.getUserSkillData(String(uid)) || userDataManager.getUserSkillData(Number(uid));
+            if (!data) return res.json({ code: 0, data: { skills: {} } });
+            // Ensure skills exist in expected shape
+            const skills = data.skills || {};
+            await mapSkillDisplayNames(skills);
+            res.json({ code: 0, data: { ...data, skills } });
+        } catch (e) {
+            logger.error('Failed to get live skill data', e);
+            res.status(500).json({ code: 1, msg: 'Failed to get live skill data' });
+        }
     });
 
     // Scene-level: per-player damage by target
@@ -1211,6 +1251,8 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
                 sObj.critRate = sObj.totalCount ? (sObj.critCount / sObj.totalCount) : 0;
             }
             const attr = (typeof fightPoint === 'number') ? { fightPoint } : undefined;
+            // Final name mapping pass to ensure all displayNames are set
+            await mapSkillDisplayNames(skills);
             res.json({ code: 0, data: { name: userName, profession, fightPoint, ...(attr?{attr}:{}), skills } });
         } catch (e) {
             logger.error('Failed to build section skill breakdown', e);
@@ -1226,6 +1268,9 @@ export function createApiRouter(isPaused, SETTINGS_PATH) {
         try {
             const data = await fsPromises.readFile(historyFilePath, 'utf8');
             const skillData = JSON.parse(data);
+            if (skillData && skillData.skills) {
+                await mapSkillDisplayNames(skillData.skills);
+            }
             res.json({ code: 0, data: skillData });
         } catch (error) {
             if (error.code === 'ENOENT') {

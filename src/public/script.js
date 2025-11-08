@@ -91,7 +91,7 @@ async function renderInlineSkills(user, modeOverride) {
         }
         const currentMode = modeOverride || rankingMode;
         const isHpsMode = (currentMode === 'hps');
-        const skillEntries = Object.entries(skills)
+        let skillEntries = Object.entries(skills)
             .filter(([sid, s]) => {
                 const t = (s?.type || '').toString();
                 const sidNum = Number(sid);
@@ -112,6 +112,29 @@ async function renderInlineSkills(user, modeOverride) {
                 }
                 return { id: sid, name: mapped, total: s.totalDamage||0, count: s.totalCount||0, critRate: (s.critRate!=null?s.critRate: ((s.totalCount||0)?(s.critCount||0)/(s.totalCount||0):0)) };
             });
+        // Fallback mapping: if many names still equal IDs, try scene-level mapping file for this user
+        try {
+            const needsMap = skillEntries.some(e => String(e.name) === String(e.id) || /^\d+$/.test(String(e.name)));
+            if (needsMap && isHistorical) {
+                const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
+                if (m) {
+                    const sceneTs = m[1];
+                    const rMap = await fetch(`/api/history/${sceneTs}/skill/${uid}`);
+                    const jsMap = await rMap.json();
+                    const sceneSkills = jsMap?.data?.skills || {};
+                    const sceneNameMap = {};
+                    for (const [sid, s] of Object.entries(sceneSkills)) {
+                        sceneNameMap[String(sid)] = s.displayName ?? sid;
+                    }
+                    skillEntries = skillEntries.map(e => {
+                        const sidNum = Number(e.id);
+                        const baseKey = Number.isFinite(sidNum) && sidNum >= 1000000000 ? String(sidNum - 1000000000) : String(e.id);
+                        const mapped = sceneNameMap[String(e.id)] || sceneNameMap[baseKey] || e.name;
+                        return { ...e, name: mapped };
+                    });
+                }
+            }
+        } catch {}
         const totalSum = skillEntries.reduce((s, v)=> s + v.total, 0);
         const encSec = (currentEncounter === 'current') ? (getCurrentEncounterSeconds() || 1) : (historicalEncounterSeconds || 1);
         const top = Math.max(1, ...skillEntries.map(e=>e.total));
@@ -1044,6 +1067,13 @@ function setBackgroundOpacity(value) {
 
 document.addEventListener('DOMContentLoaded', () => {
     initialize();
+    // Default selection: Current (Section)
+    try {
+        if (encounterSelect) {
+            encounterSelect.value = 'current#section';
+            currentEncounter = 'current#section';
+        }
+    } catch {}
     // Load current hotkeys
     if (window.electronAPI.getHotkeys) {
         window.electronAPI.getHotkeys().then((hk) => {
@@ -1194,8 +1224,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 // Insert right after the scene option (append is fine as we're building in order)
                                 encounterSelect.appendChild(secOpt);
                             }
-                            // Restore previous selection if still present; else keep 'current'
-                            const toSelect = encounterSelect.querySelector(`option[value="${selectedBefore}"]`) ? selectedBefore : 'current';
+                            // Restore previous selection if still present; else default to 'current#section'
+                            const toSelect = encounterSelect.querySelector(`option[value="${selectedBefore}"]`) ? selectedBefore : 'current#section';
                             encounterSelect.value = toSelect;
                         }).catch(()=>{});
                     }).catch(()=>{});
