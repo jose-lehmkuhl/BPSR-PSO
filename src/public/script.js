@@ -100,7 +100,16 @@ async function renderInlineSkills(user, modeOverride) {
             })
             .map(([sid, s])=>{
                 const rawName = (s.displayName ?? sid);
-                const mapped = (skillNameMap && skillNameMap[String(sid)]) ? skillNameMap[String(sid)] : rawName;
+                let mapped = rawName;
+                if (skillNameMap) {
+                    const sidNum = Number(sid);
+                    if (skillNameMap[String(sid)] != null) {
+                        mapped = skillNameMap[String(sid)];
+                    } else if (Number.isFinite(sidNum) && sidNum >= 1000000000 && skillNameMap[String(sidNum - 1000000000)] != null) {
+                        // Normalize healing skill id back to base id for name mapping
+                        mapped = skillNameMap[String(sidNum - 1000000000)];
+                    }
+                }
                 return { id: sid, name: mapped, total: s.totalDamage||0, count: s.totalCount||0, critRate: (s.critRate!=null?s.critRate: ((s.totalCount||0)?(s.critCount||0)/(s.totalCount||0):0)) };
             });
         const totalSum = skillEntries.reduce((s, v)=> s + v.total, 0);
@@ -1124,31 +1133,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // Populate/refresh encounter list
     if (encounterSelect) {
         const refreshEncounters = () => {
+            const selectedBefore = encounterSelect.value || 'current';
+            // Reset select to desired base ordering: Current (Overall), Current (Section)
+            encounterSelect.innerHTML = '';
+            const optCur = document.createElement('option');
+            optCur.value = 'current';
+            optCur.textContent = 'Current (Overall)';
+            encounterSelect.appendChild(optCur);
+            const optCurSec = document.createElement('option');
+            optCurSec.value = 'current#section';
+            optCurSec.textContent = 'Current (Section)';
+            encounterSelect.appendChild(optCurSec);
+            // Then append historical scenes (newest first) and their sections
             fetch(`/api/history/list`).then(r=>r.json()).then((resp)=>{
                 if (!Array.isArray(resp?.data)) return;
-                // newest first
                 const list = resp.data.slice().sort((a,b)=> Number(b) - Number(a));
-                // Build a set of current option values
-                const existing = new Set(Array.from(encounterSelect.options).map(o=>o.value));
-                const insertAfter = encounterSelect.querySelector('option[value="current"]');
-                let insertRef = insertAfter ? insertAfter.nextSibling : encounterSelect.firstChild;
-                // Ensure a "current section" option right after current
-                if (!encounterSelect.querySelector('option[value="current#section"]')) {
-                    const optSec = document.createElement('option');
-                    optSec.value = 'current#section';
-                    optSec.textContent = 'Current (Section)';
-                    const curOpt = encounterSelect.querySelector('option[value="current"]');
-                    if (curOpt && curOpt.nextSibling) {
-                        encounterSelect.insertBefore(optSec, curOpt.nextSibling);
-                    } else if (curOpt) {
-                        encounterSelect.appendChild(optSec);
-                    } else {
-                        encounterSelect.insertBefore(optSec, encounterSelect.firstChild);
-                    }
-                }
                 for (const ts of list) {
-                    if (existing.has(ts)) continue; // don't disturb current selection
-                    // Fetch meta to label as Name(Targets) [mm:ss]
+                    // Fetch meta to label as Name(Targets) Overall [mm:ss]
                     fetch(`/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
                         if (!(meta?.code === 0 && meta.data)) return;
                         let labelText = '';
@@ -1169,83 +1170,33 @@ document.addEventListener('DOMContentLoaded', () => {
                             const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
                             labelText = `${name || 'Encounter'}(${targets}) Overall [${mm}:${ss}]`;
                         }
-                        const head = labelText.split('(')[0].trim();
-                        if (!head || head === 'Encounter') return; // filter placeholder
+                        const head = (labelText || '').split('(')[0].trim();
+                        if (!head || head === 'Encounter') return;
                         const opt = document.createElement('option');
-                        opt.value = ts; opt.textContent = labelText;
-                        if (insertRef) {
-                            encounterSelect.insertBefore(opt, insertRef);
-                        } else {
-                            encounterSelect.appendChild(opt);
-                        }
-                        // Also insert section entries for this scene (newest first)
+                        opt.value = ts;
+                        opt.textContent = labelText;
+                        encounterSelect.appendChild(opt);
+                        // Append section entries for this scene (newest first)
                         fetch(`/api/history/${ts}/analysis`).then(r=>r.json()).then(analysis=>{
                             if (!(analysis?.code === 0 && Array.isArray(analysis.data?.sections))) return;
                             const sceneName = analysis.data.sceneName || head || '';
                             const secs = analysis.data.sections.slice().sort((a,b)=> (b.end||0) - (a.end||0));
-                            // insert below scene
                             for (let i = 0; i < secs.length; i++) {
                                 const s = secs[i];
                                 const val = `${ts}#sec:${s.index}`;
-                                if (existing.has(val) || encounterSelect.querySelector(`option[value="${val}"]`)) continue;
                                 const d = s.durationMs || 0;
                                 const mm = String(Math.floor(d/60000)).padStart(2,'0');
                                 const ss = String(Math.floor((d%60000)/1000)).padStart(2,'0');
                                 const secLabel = `Sec ${s.index+1} — ${s.topEnemyName || 'Section'} [${mm}:${ss}] — Scene: ${sceneName}`;
                                 const secOpt = document.createElement('option');
-                                secOpt.value = val; secOpt.textContent = secLabel;
-                                if (opt.nextSibling) {
-                                    encounterSelect.insertBefore(secOpt, opt.nextSibling);
-                                } else {
-                                    encounterSelect.appendChild(secOpt);
-                                }
+                                secOpt.value = val;
+                                secOpt.textContent = secLabel;
+                                // Insert right after the scene option (append is fine as we're building in order)
+                                encounterSelect.appendChild(secOpt);
                             }
-                        }).catch(()=>{});
-                    }).catch(()=>{});
-                }
-                // Update labels for existing options (including the most recent one that just finalized)
-                for (const opt of Array.from(encounterSelect.options)) {
-                    const ts = opt.value;
-                    if (!ts || ts === 'current' || ts.includes('#sec:')) continue;
-                    fetch(`/api/history/${ts}/meta`).then(r=>r.json()).then(meta=>{
-                        if (!(meta?.code === 0 && meta.data)) return;
-                        let labelText = meta.data.label;
-                        if (!labelText) {
-                            const name = meta.data.topEnemyName || '';
-                            const targets = meta.data.targetCount || 0;
-                            const dur = meta.data.durationMs || 0;
-                            const mm = String(Math.floor(dur/60000)).padStart(2,'0');
-                            const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
-                            labelText = `${name || 'Encounter'}(${targets}) Overall [${mm}:${ss}]`;
-                        }
-                        const head = (labelText || '').split('(')[0].trim();
-                        if (!head || head === 'Encounter') return; // don't replace with placeholder
-                        if (opt.textContent !== labelText) opt.textContent = labelText;
-                        // refresh section entries for this scene
-                        fetch(`/api/history/${ts}/analysis`).then(r=>r.json()).then(analysis=>{
-                            if (!(analysis?.code === 0 && Array.isArray(analysis.data?.sections))) return;
-                            const sceneName = analysis.data.sceneName || head || '';
-                            const secs = analysis.data.sections.slice().sort((a,b)=> (b.end||0) - (a.end||0));
-                            for (let i = 0; i < secs.length; i++) {
-                                const s = secs[i];
-                                const val = `${ts}#sec:${s.index}`;
-                                const d = s.durationMs || 0;
-                                const mm = String(Math.floor(d/60000)).padStart(2,'0');
-                                const ss = String(Math.floor((d%60000)/1000)).padStart(2,'0');
-                                const secLabel = `Sec ${s.index+1} — ${s.topEnemyName || 'Section'} [${mm}:${ss}] — Scene: ${sceneName}`;
-                                let secOpt = encounterSelect.querySelector(`option[value="${val}"]`);
-                                if (!secOpt) {
-                                    secOpt = document.createElement('option');
-                                    secOpt.value = val;
-                                    // insert after scene option
-                                    if (opt.nextSibling) {
-                                        encounterSelect.insertBefore(secOpt, opt.nextSibling);
-                                    } else {
-                                        encounterSelect.appendChild(secOpt);
-                                    }
-                                }
-                                if (secOpt.textContent !== secLabel) secOpt.textContent = secLabel;
-                            }
+                            // Restore previous selection if still present; else keep 'current'
+                            const toSelect = encounterSelect.querySelector(`option[value="${selectedBefore}"]`) ? selectedBefore : 'current';
+                            encounterSelect.value = toSelect;
                         }).catch(()=>{});
                     }).catch(()=>{});
                 }
