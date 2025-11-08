@@ -351,6 +351,7 @@ let currentInlineView = null; // { type: 'skills'|'npc'|'tanking', payload: {...
 let inlineBackBtn = null;
 let prevHeaderText = '';
 let skillNameMap = null;
+let isEncounterSelectOpen = false;
 
 const SERVER_URL = window.location.host;
 
@@ -1072,6 +1073,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (encounterSelect) {
             encounterSelect.value = 'current#section';
             currentEncounter = 'current#section';
+            // Track open/close to avoid flicker during refresh
+            encounterSelect.addEventListener('focus', ()=> { isEncounterSelectOpen = true; });
+            encounterSelect.addEventListener('mousedown', ()=> { isEncounterSelectOpen = true; });
+            encounterSelect.addEventListener('blur', ()=> { isEncounterSelectOpen = false; });
+            encounterSelect.addEventListener('change', ()=> { isEncounterSelectOpen = false; });
         }
     } catch {}
     // Load current hotkeys
@@ -1163,17 +1169,37 @@ document.addEventListener('DOMContentLoaded', () => {
     // Populate/refresh encounter list
     if (encounterSelect) {
         const refreshEncounters = () => {
-            const selectedBefore = encounterSelect.value || 'current';
-            // Reset select to desired base ordering: Current (Overall), Current (Section)
-            encounterSelect.innerHTML = '';
-            const optCur = document.createElement('option');
-            optCur.value = 'current';
-            optCur.textContent = 'Current (Overall)';
-            encounterSelect.appendChild(optCur);
-            const optCurSec = document.createElement('option');
-            optCurSec.value = 'current#section';
-            optCurSec.textContent = 'Current (Section)';
-            encounterSelect.appendChild(optCurSec);
+            // Avoid flicker: don't update while user is interacting with the select
+            if (document.activeElement === encounterSelect || isEncounterSelectOpen) return;
+            const selectedBefore = encounterSelect.value || 'current#section';
+            // Ensure the first two options exist and are in correct order without clearing the list
+            const ensureOption = (value, label, index) => {
+                let opt = encounterSelect.querySelector(`option[value="${value}"]`);
+                if (!opt) {
+                    opt = document.createElement('option');
+                    opt.value = value;
+                    opt.textContent = label;
+                    // insert at desired position
+                    if (index >= encounterSelect.options.length) {
+                        encounterSelect.appendChild(opt);
+                    } else {
+                        encounterSelect.insertBefore(opt, encounterSelect.options[index]);
+                    }
+                } else {
+                    if (opt.textContent !== label) opt.textContent = label;
+                    // Move to desired index if needed
+                    if (Array.prototype.indexOf.call(encounterSelect.options, opt) !== index) {
+                        encounterSelect.removeChild(opt);
+                        if (index >= encounterSelect.options.length) {
+                            encounterSelect.appendChild(opt);
+                        } else {
+                            encounterSelect.insertBefore(opt, encounterSelect.options[index]);
+                        }
+                    }
+                }
+            };
+            ensureOption('current#section', 'Current (Section)', 0);
+            ensureOption('current', 'Current (Overall)', 1);
             // Then append historical scenes (newest first) and their sections
             fetch(`/api/history/list`).then(r=>r.json()).then((resp)=>{
                 if (!Array.isArray(resp?.data)) return;
@@ -1202,10 +1228,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         const head = (labelText || '').split('(')[0].trim();
                         if (!head || head === 'Encounter') return;
-                        const opt = document.createElement('option');
-                        opt.value = ts;
-                        opt.textContent = labelText;
-                        encounterSelect.appendChild(opt);
+                        // Insert/update scene option without disturbing current selection
+                        let opt = encounterSelect.querySelector(`option[value="${ts}"]`);
+                        if (!opt) {
+                            opt = document.createElement('option');
+                            opt.value = ts;
+                            opt.textContent = labelText;
+                            encounterSelect.appendChild(opt);
+                        } else if (opt.textContent !== labelText) {
+                            opt.textContent = labelText;
+                        }
                         // Append section entries for this scene (newest first)
                         fetch(`/api/history/${ts}/analysis`).then(r=>r.json()).then(analysis=>{
                             if (!(analysis?.code === 0 && Array.isArray(analysis.data?.sections))) return;
@@ -1218,15 +1250,21 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const mm = String(Math.floor(d/60000)).padStart(2,'0');
                                 const ss = String(Math.floor((d%60000)/1000)).padStart(2,'0');
                                 const secLabel = `Sec ${s.index+1} — ${s.topEnemyName || 'Section'} [${mm}:${ss}] — Scene: ${sceneName}`;
-                                const secOpt = document.createElement('option');
-                                secOpt.value = val;
-                                secOpt.textContent = secLabel;
-                                // Insert right after the scene option (append is fine as we're building in order)
-                                encounterSelect.appendChild(secOpt);
+                                // Insert/update section option
+                                let secOpt = encounterSelect.querySelector(`option[value="${val}"]`);
+                                if (!secOpt) {
+                                    secOpt = document.createElement('option');
+                                    secOpt.value = val;
+                                    secOpt.textContent = secLabel;
+                                    encounterSelect.appendChild(secOpt);
+                                } else if (secOpt.textContent !== secLabel) {
+                                    secOpt.textContent = secLabel;
+                                }
                             }
-                            // Restore previous selection if still present; else default to 'current#section'
-                            const toSelect = encounterSelect.querySelector(`option[value="${selectedBefore}"]`) ? selectedBefore : 'current#section';
-                            encounterSelect.value = toSelect;
+                            // Restore selection if it changed unintentionally
+                            if (encounterSelect.value !== selectedBefore && encounterSelect.querySelector(`option[value="${selectedBefore}"]`)) {
+                                encounterSelect.value = selectedBefore;
+                            }
                         }).catch(()=>{});
                     }).catch(()=>{});
                 }
