@@ -989,10 +989,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.refreshEncounters = refreshEncounters;
         encounterSelect.addEventListener('change', async (e)=>{
             const nextEncounter = e.target.value || 'current';
-            // If leaving current to view a historical encounter, end the current encounter immediately
-            if (wasOnCurrentEncounter && nextEncounter !== 'current') {
-                fetch(`/api/clear`).catch(()=>{});
-            }
             currentEncounter = nextEncounter;
             if (currentEncounter === 'current') {
                 historicalUsers = null;
