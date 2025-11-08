@@ -65,6 +65,9 @@ class UserDataManager {
         this.battleSections = [];
         this.currentBattleStartTs = null;
         this.lastDamageTs = 0;
+        // Live per-section aggregates (ephemeral)
+        this.currentSectionStartTs = null;
+        this.currentSectionTotals = new Map(); // uid -> { damage, healing }
         // Safeguards for combat timer races
         this.combatLock = new Lock();
         this.lastSectionCloseTs = 0;
@@ -255,6 +258,29 @@ class UserDataManager {
 
         await this._writeEvent(eventsFile, logDir, type, data);
         this.lastLogTime = nowTs;
+
+        // Update live section aggregates when a section is open
+        if (this.currentBattleStartTs != null) {
+            if (type === 'damage') {
+                const attacker = Number((data && data.attackerUid) || NaN);
+                const val = Number((data && (data.hpLessen > 0 ? data.hpLessen : data.value)) || 0);
+                if (Number.isFinite(attacker) && val > 0) {
+                    const cur = this.currentSectionTotals.get(attacker) || { damage: 0, healing: 0 };
+                    cur.damage += val;
+                    this.currentSectionTotals.set(attacker, cur);
+                }
+                this.lastDamageTs = nowTs;
+            } else if (type === 'heal') {
+                const healer = Number((data && data.attackerUid) || NaN);
+                const val = Number((data && (data.hpLessen > 0 ? data.hpLessen : data.value)) || 0);
+                if (Number.isFinite(healer) && val > 0) {
+                    const cur = this.currentSectionTotals.get(healer) || { damage: 0, healing: 0 };
+                    cur.healing += val;
+                    this.currentSectionTotals.set(healer, cur);
+                }
+                this.lastDamageTs = nowTs;
+            }
+        }
     }
 
     async _writeEvent(eventsFile, logDir, type, data) {
@@ -300,11 +326,28 @@ class UserDataManager {
                 this.currentBattleStartTs = nowTs;
                 await this._writeEvent(eventsFile, logDir, 'battle_section_open', { start: nowTs });
                 this.lastSectionOpenTs = nowTs;
+                // reset live section aggregates
+                this.currentSectionStartTs = nowTs;
+                this.currentSectionTotals.clear();
             }
             this.lastDamageTs = nowTs;
         } finally {
             this.combatLock.release();
         }
+    }
+    getLiveSectionSnapshot() {
+        if (this.currentBattleStartTs == null) return null;
+        const now = Date.now();
+        const endClamp = (this.lastDamageTs > 0) ? this.lastDamageTs : now;
+        const totals = {};
+        for (const [uid, v] of this.currentSectionTotals.entries()) {
+            totals[String(uid)] = { damage: v.damage || 0, healing: v.healing || 0 };
+        }
+        return {
+            start: this.currentBattleStartTs,
+            end: endClamp,
+            totals,
+        };
     }
 
     async addRawPacket(meta, buffer) {

@@ -77,6 +77,7 @@ class Server {
                 userDataManager.updateAllRealtimeDps();
                 const userData = userDataManager.getAllUsersData();
                 const enemiesData = userDataManager.getAllEnemiesData();
+                const liveSection = userDataManager.getLiveSectionSnapshot();
                 socket.emit('data', {
                     code: 0,
                     user: userData,
@@ -86,6 +87,7 @@ class Server {
                     combatIdleMs: userDataManager.battleIdleMs,
                     combatTimeMs: userDataManager.getLiveCombatTimeMs(),
                     combatClock: userDataManager.getCombatClockSnapshot(),
+                    liveSection,
                 });
             }
         }, 100);

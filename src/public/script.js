@@ -291,7 +291,7 @@ function renderNpcTankingList(enemies) {
 }
 
 function updateAll() {
-    if (currentEncounter !== 'current') {
+    if (currentEncounter !== 'current' && currentEncounter !== 'current#section') {
         // Historical view: render from cached historical arrays
         if (rankingMode === 'npc') {
             const enemiesArray = Array.isArray(historicalEnemies) ? historicalEnemies : [];
@@ -302,6 +302,32 @@ function updateAll() {
             renderDataList(usersArray);
             return;
         }
+    }
+    if (currentEncounter === 'current#section') {
+        const usersArray = Object.values(allUsers).filter((user) => (user.total_damage?.total||0) > 0 || (user.total_healing?.total||0) > 0 || (user.taken_damage||0)>0);
+        const sec = window.__liveSection || null;
+        const encSec = (() => {
+            if (sec && sec.start && sec.end) return Math.max(1, Math.floor((Math.min(Date.now(), sec.end) - sec.start) / 1000));
+            if (combatClockFromServer && combatClockFromServer.start && combatClockFromServer.last) {
+                const now = Date.now();
+                const clampEnd = Math.min(now, combatClockFromServer.last);
+                return Math.max(1, Math.floor((clampEnd - combatClockFromServer.start) / 1000));
+            }
+            return 1;
+        })();
+        const totals = (sec && sec.totals) ? sec.totals : {};
+        const mapped = usersArray.map(u => {
+            const t = totals[String(u.id)] || { damage: 0, healing: 0 };
+            return {
+                ...u,
+                total_damage: { total: t.damage || 0 },
+                total_healing: { total: t.healing || 0 },
+                total_dps: (t.damage || 0) / encSec,
+                total_hps: (t.healing || 0) / encSec
+            };
+        });
+        renderDataList(mapped);
+        return;
     }
     if (rankingMode === 'npc') {
         const enemiesArray = Object.entries(allEnemies).map(([id, e]) => ({ id, ...e }))
@@ -320,6 +346,9 @@ function processDataUpdate(data) {
     if (!data.user) {
         console.warn('Received data without a "user" object:', data);
         return;
+    }
+    if (data.liveSection) {
+        window.__liveSection = data.liveSection;
     }
 
     for (const userId in data.user) {
@@ -885,6 +914,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 const existing = new Set(Array.from(encounterSelect.options).map(o=>o.value));
                 const insertAfter = encounterSelect.querySelector('option[value="current"]');
                 let insertRef = insertAfter ? insertAfter.nextSibling : encounterSelect.firstChild;
+                // Ensure a "current section" option right after current
+                if (!encounterSelect.querySelector('option[value="current#section"]')) {
+                    const optSec = document.createElement('option');
+                    optSec.value = 'current#section';
+                    optSec.textContent = 'Current (Section)';
+                    const curOpt = encounterSelect.querySelector('option[value="current"]');
+                    if (curOpt && curOpt.nextSibling) {
+                        encounterSelect.insertBefore(optSec, curOpt.nextSibling);
+                    } else if (curOpt) {
+                        encounterSelect.appendChild(optSec);
+                    } else {
+                        encounterSelect.insertBefore(optSec, encounterSelect.firstChild);
+                    }
+                }
                 for (const ts of list) {
                     if (existing.has(ts)) continue; // don't disturb current selection
                     // Fetch meta to label as Name(Targets) [mm:ss]
