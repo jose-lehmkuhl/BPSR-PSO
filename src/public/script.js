@@ -24,26 +24,29 @@ function getNextColorShades() {
     return { dps: dpsColor, hps: hpsColor };
 }
 
-// Inline breakdown: header helpers and renderers
-function enterInlineHeader(titleText) {
+// Inline breakdown: footer-based back button and renderers
+function enterInlineHeader(_titleText) {
     try {
-        allButtons.forEach((b)=> b && b.classList && b.classList.add('hidden'));
-        if (serverStatus) {
-            prevHeaderText = serverStatus.textContent || '';
-            serverStatus.textContent = titleText || 'Breakdown';
-        }
+        // Footer toolbar elements
+        const footer = document.querySelector('.footer-toolbar');
+        const encounterLabel = footer ? footer.querySelector('label[for="encounterSelect"]') : null;
+        const select = encounterSelect;
+        if (encounterLabel) encounterLabel.classList.add('hidden');
+        if (select) select.classList.add('hidden');
+        // Create back button in footer
         if (!inlineBackBtn) {
             inlineBackBtn = document.createElement('button');
+            inlineBackBtn.type = 'button';
             inlineBackBtn.textContent = '← Back';
-            inlineBackBtn.style.marginLeft = '8px';
+            inlineBackBtn.className = 'btn';
             inlineBackBtn.onclick = ()=> {
                 currentInlineView = null;
                 exitInlineHeader();
                 updateAll();
             };
-            if (serverStatus && serverStatus.parentElement) {
-                serverStatus.parentElement.appendChild(inlineBackBtn);
-            }
+        }
+        if (footer && !inlineBackBtn.parentElement) {
+            footer.appendChild(inlineBackBtn);
         }
         if (inlineBackBtn) inlineBackBtn.classList.remove('hidden');
     } catch {}
@@ -51,20 +54,28 @@ function enterInlineHeader(titleText) {
 
 function exitInlineHeader() {
     try {
-        allButtons.forEach((b)=> b && b.classList && b.classList.remove('hidden'));
-        if (serverStatus) serverStatus.textContent = prevHeaderText || serverStatus.textContent;
+        const footer = document.querySelector('.footer-toolbar');
+        const encounterLabel = footer ? footer.querySelector('label[for="encounterSelect"]') : null;
+        const select = encounterSelect;
+        if (encounterLabel) encounterLabel.classList.remove('hidden');
+        if (select) select.classList.remove('hidden');
         if (inlineBackBtn) inlineBackBtn.classList.add('hidden');
     } catch {}
 }
 
 async function renderInlineSkills(user, modeOverride) {
     const uid = user.id;
-    const isHistorical = currentEncounter !== 'current';
+    const isLiveSection = currentEncounter === 'current#section';
+    const isHistorical = (currentEncounter !== 'current' && !isLiveSection);
     let endpoint = `/api/skill/${uid}`;
     if (isHistorical) {
         const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
         if (m) endpoint = `/api/history/${m[1]}/section/${m[2]}/skill/${uid}`;
         else endpoint = `/api/history/${currentEncounter}/skill/${uid}`;
+    } else if (isLiveSection) {
+        // Live section skill breakdown is not persisted; show a friendly message
+        columnsContainer.innerHTML = '<div style="margin:8px">Skill breakdown for Current (Section) is available after the section closes (select the section under History). Use Current (Overall) for live skill totals.</div>';
+        return;
     }
     try {
         const r = await fetch(endpoint);
@@ -102,7 +113,7 @@ async function renderInlineSkills(user, modeOverride) {
             item.className = 'data-item';
             const barFillColor = '#2563eb';
             item.innerHTML = `
-                <div class="main-bar">
+                <div class="main-bar" style="width: 100%;">
                     <div class="dps-bar-fill" style="width: ${percent}%; background-color: ${barFillColor};"></div>
                     <div class="content">
                         <span class="name">${e.name}</span>
@@ -119,13 +130,14 @@ async function renderInlineSkills(user, modeOverride) {
 }
 
 async function renderInlineNpc(enemyUid, enemyName) {
-    const isHistorical = currentEncounter !== 'current';
+    const isLiveSection = currentEncounter === 'current#section';
+    const isHistorical = (currentEncounter !== 'current' && !isLiveSection);
     let endpoint = `/api/npc/${enemyUid}`;
     if (isHistorical) {
         const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
         if (m) endpoint = `/api/history/${m[1]}/section/${m[2]}/npc/${enemyUid}`;
         else endpoint = `/api/history/${currentEncounter}/npc/${enemyUid}`;
-    }
+    } // live section falls back to live scene endpoint (no per-section live API)
     try {
         const r = await fetch(endpoint);
         const resp = await r.json();
@@ -147,7 +159,7 @@ async function renderInlineNpc(enemyUid, enemyName) {
             const item = document.createElement('li');
             item.className = 'data-item';
             item.innerHTML = `
-                <div class="main-bar">
+                <div class="main-bar" style="width: 100%;">
                     <div class="tanking-bar-fill" style="width: ${percent}%; background-color: rgba(255,0,0,0.5);"></div>
                     <div class="content">
                         <span class="name">${it.name || ('#'+it.attackerUid)}</span>
@@ -165,13 +177,14 @@ async function renderInlineNpc(enemyUid, enemyName) {
 
 async function renderInlineTanking(user) {
     const uid = user.id;
-    const isHistorical = currentEncounter !== 'current';
+    const isLiveSection = currentEncounter === 'current#section';
+    const isHistorical = (currentEncounter !== 'current' && !isLiveSection);
     let endpoint = `/api/tanking/${uid}`;
     if (isHistorical) {
         const m = currentEncounter.match(/^([0-9]+)#sec:(\d+)$/);
         if (m) endpoint = `/api/history/${m[1]}/section/${m[2]}/tanking/${uid}`;
         else endpoint = `/api/history/${currentEncounter}/tanking/${uid}`;
-    }
+    } // live section falls back to live scene endpoint (no per-section live API)
     try {
         const r = await fetch(endpoint);
         const resp = await r.json();
@@ -194,7 +207,7 @@ async function renderInlineTanking(user) {
             const item = document.createElement('li');
             item.className = 'data-item';
             item.innerHTML = `
-                <div class="main-bar">
+                <div class="main-bar" style="width: 100%;">
                     <div class="tanking-bar-fill" style="width: ${percent}%; background-color: rgba(255,0,0,0.5);"></div>
                     <div class="content">
                         <span class="name">${it.name || ('#'+it.attackerUid)}</span>
@@ -297,8 +310,8 @@ function formatNumber(num) {
 function renderTotalBar(users, encSec) {
     const container = document.getElementById('totalBarContainer');
     if (!container) return;
-    // For NPC/tanking views, hide the bar
-    if (rankingMode === 'npc') { container.classList.add('hidden'); container.innerHTML = ''; return; }
+    // For NPC/tanking views or inline breakdown, hide the bar
+    if (rankingMode === 'npc' || currentInlineView) { container.classList.add('hidden'); container.innerHTML = ''; return; }
     const totalDamage = users.reduce((sum, u)=> sum + ((u.total_damage?.total)||0), 0);
     const dps = (encSec && encSec>0) ? (totalDamage / encSec) : 0;
     const labelLeft = 'All';
@@ -532,8 +545,14 @@ function updateAll() {
     } else {
         const usersArray = Object.values(allUsers).filter((user) => (user.total_damage?.total||0) > 0 || (user.total_healing?.total||0) > 0 || (user.taken_damage||0)>0);
         renderDataList(usersArray);
-        const encSec = getCurrentEncounterSeconds();
-        renderTotalBar(usersArray, encSec);
+        if (!currentInlineView) {
+            const encSec = getCurrentEncounterSeconds();
+            renderTotalBar(usersArray, encSec);
+        } else {
+            // ensure total-bar hidden in inline view
+            const container = document.getElementById('totalBarContainer');
+            if (container) { container.classList.add('hidden'); container.innerHTML = ''; }
+        }
     }
 }
 
