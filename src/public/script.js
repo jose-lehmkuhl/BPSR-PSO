@@ -935,14 +935,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!(meta?.code === 0 && meta.data)) return;
                         let labelText = '';
                         if (meta.data.label) {
-                            labelText = meta.data.label;
+                            const idx = meta.data.label.lastIndexOf('[');
+                            if (idx > 0) {
+                                const headText = meta.data.label.slice(0, idx).trim();
+                                const tailText = meta.data.label.slice(idx);
+                                labelText = `${headText} Overall ${tailText}`;
+                            } else {
+                                labelText = meta.data.label;
+                            }
                         } else {
                             const name = meta.data.topEnemyName || '';
                             const targets = meta.data.targetCount || 0;
                             const dur = meta.data.durationMs || 0;
                             const mm = String(Math.floor(dur/60000)).padStart(2,'0');
                             const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
-                            labelText = `${name || 'Encounter'}(${targets}) [${mm}:${ss}]`;
+                            labelText = `${name || 'Encounter'}(${targets}) Overall [${mm}:${ss}]`;
                         }
                         const head = labelText.split('(')[0].trim();
                         if (!head || head === 'Encounter') return; // filter placeholder
@@ -953,12 +960,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else {
                             encounterSelect.appendChild(opt);
                         }
-                        // Also insert section entries for this scene
+                        // Also insert section entries for this scene (newest first)
                         fetch(`/api/history/${ts}/analysis`).then(r=>r.json()).then(analysis=>{
                             if (!(analysis?.code === 0 && Array.isArray(analysis.data?.sections))) return;
                             const sceneName = analysis.data.sceneName || head || '';
-                            const secs = analysis.data.sections;
-                            // sections are in chronological order; insert below scene
+                            const secs = analysis.data.sections.slice().sort((a,b)=> (b.end||0) - (a.end||0));
+                            // insert below scene
                             for (let i = 0; i < secs.length; i++) {
                                 const s = secs[i];
                                 const val = `${ts}#sec:${s.index}`;
@@ -991,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             const dur = meta.data.durationMs || 0;
                             const mm = String(Math.floor(dur/60000)).padStart(2,'0');
                             const ss = String(Math.floor((dur%60000)/1000)).padStart(2,'0');
-                            labelText = `${name || 'Encounter'}(${targets}) [${mm}:${ss}]`;
+                            labelText = `${name || 'Encounter'}(${targets}) Overall [${mm}:${ss}]`;
                         }
                         const head = (labelText || '').split('(')[0].trim();
                         if (!head || head === 'Encounter') return; // don't replace with placeholder
@@ -1000,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         fetch(`/api/history/${ts}/analysis`).then(r=>r.json()).then(analysis=>{
                             if (!(analysis?.code === 0 && Array.isArray(analysis.data?.sections))) return;
                             const sceneName = analysis.data.sceneName || head || '';
-                            const secs = analysis.data.sections;
+                            const secs = analysis.data.sections.slice().sort((a,b)=> (b.end||0) - (a.end||0));
                             for (let i = 0; i < secs.length; i++) {
                                 const s = secs[i];
                                 const val = `${ts}#sec:${s.index}`;
