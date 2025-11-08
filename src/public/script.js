@@ -613,6 +613,7 @@ function openBreakdown(user, modeOverride) {
     // Build skills array from skill summaries on demand via API if historical; else from live snapshot composed server-side
     const uid = user.id;
     const isHistorical = currentEncounter !== 'current';
+    const isSectionSelection = isHistorical && /^([0-9]+)#sec:(\d+)$/.test(currentEncounter);
     const buildAndShow = async (resp) => {
         if (!(resp?.code === 0 && resp.data)) return false;
         const data = resp.data || {};
@@ -710,6 +711,12 @@ function openBreakdown(user, modeOverride) {
         breakdownModal.classList.remove('hidden');
         return true;
     };
+    // If Electron integration is present, only use it for scene or live; for section use in-page modal
+    if (!isSectionSelection && window?.electronAPI?.openBreakdown) {
+        const payload = { uid: user.id, timestamp: isHistorical ? currentEncounter : 'current' };
+        window.electronAPI.openBreakdown(payload);
+        return;
+    }
     (async ()=>{
         try {
             if (isHistorical) {
