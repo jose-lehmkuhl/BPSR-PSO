@@ -1215,11 +1215,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         opt.value = ts;
                         opt.textContent = labelText;
                         encounterSelect.appendChild(opt);
-                        // Append section entries for this scene (newest first)
+                        // Append section entries for this scene (newest first), grouped right under this scene
                         fetch(`/api/history/${ts}/analysis`).then(r=>r.json()).then(analysis=>{
                             if (!(analysis?.code === 0 && Array.isArray(analysis.data?.sections))) return;
                             const sceneName = analysis.data.sceneName || head || '';
                             const secs = analysis.data.sections.slice().sort((a,b)=> (b.end||0) - (a.end||0));
+                            // anchor starts at the scene option; each section is inserted right after the last inserted one
+                            let anchor = opt;
                             for (let i = 0; i < secs.length; i++) {
                                 const s = secs[i];
                                 const val = `${ts}#sec:${s.index}`;
@@ -1227,15 +1229,29 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const mm = String(Math.floor(d/60000)).padStart(2,'0');
                                 const ss = String(Math.floor((d%60000)/1000)).padStart(2,'0');
                                 const secLabel = `Sec ${s.index+1} — ${s.topEnemyName || 'Section'} [${mm}:${ss}] — Scene: ${sceneName}`;
-                                const secOpt = document.createElement('option');
-                                secOpt.value = val;
-                                secOpt.textContent = secLabel;
-                                // Insert right after the scene option (append is fine as we're building in order)
-                                encounterSelect.appendChild(secOpt);
+                                let secOpt = encounterSelect.querySelector(`option[value="${val}"]`);
+                                if (!secOpt) {
+                                    secOpt = document.createElement('option');
+                                    secOpt.value = val;
+                                }
+                                if (secOpt.textContent !== secLabel) secOpt.textContent = secLabel;
+                                // Ensure placement immediately after the current anchor
+                                if (secOpt.parentElement !== encounterSelect || secOpt.previousSibling !== anchor) {
+                                    if (secOpt.parentElement === encounterSelect) {
+                                        encounterSelect.removeChild(secOpt);
+                                    }
+                                    if (anchor && anchor.nextSibling) {
+                                        encounterSelect.insertBefore(secOpt, anchor.nextSibling);
+                                    } else {
+                                        encounterSelect.appendChild(secOpt);
+                                    }
+                                }
+                                anchor = secOpt;
                             }
-                            // Restore previous selection if still present; else default to 'current#section'
-                            const toSelect = encounterSelect.querySelector(`option[value="${selectedBefore}"]`) ? selectedBefore : 'current#section';
-                            encounterSelect.value = toSelect;
+                            // Restore selection if it still exists
+                            if (encounterSelect.querySelector(`option[value="${selectedBefore}"]`)) {
+                                encounterSelect.value = selectedBefore;
+                            }
                         }).catch(()=>{});
                     }).catch(()=>{});
                 }
