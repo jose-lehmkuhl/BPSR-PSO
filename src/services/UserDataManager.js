@@ -61,7 +61,7 @@ class UserDataManager {
         this.appearWindow = { count: 0, startTs: 0 };
 
         // Battle section tracking (scene-scoped)
-        this.battleIdleMs = 5000;
+        this.battleIdleMs = 10000;
         this.battleSections = [];
         this.currentBattleStartTs = null;
         this.lastDamageTs = 0;
@@ -96,7 +96,7 @@ class UserDataManager {
         return {
             start: this.currentBattleStartTs || 0,
             last: this.lastDamageTs || 0,
-            idle: this.battleIdleMs || 5000,
+            idle: this.battleIdleMs || 10000,
         };
     }
 

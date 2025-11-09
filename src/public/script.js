@@ -351,6 +351,7 @@ let currentInlineView = null; // { type: 'skills'|'npc'|'tanking', payload: {...
 let inlineBackBtn = null;
 let prevHeaderText = '';
 let skillNameMap = null;
+let lastSectionStartNotified = 0;
 
 const SERVER_URL = window.location.host;
 
@@ -619,6 +620,14 @@ function processDataUpdate(data) {
     if (data.liveSection) {
         window.__liveSection = data.liveSection;
     }
+    // Refresh encounter list only when a new section starts (to avoid flicker)
+    try {
+        const ls = data.liveSection;
+        if (ls && typeof ls.start === 'number' && ls.start > 0 && ls.start !== lastSectionStartNotified) {
+            lastSectionStartNotified = ls.start;
+            if (window.refreshEncounters) window.refreshEncounters();
+        }
+    } catch(_) {}
 
     for (const userId in data.user) {
         const newUser = data.user[userId];
@@ -1233,7 +1242,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }).catch(()=>{});
         };
         refreshEncounters();
-        setInterval(refreshEncounters, 5000);
         // expose to other functions
         window.refreshEncounters = refreshEncounters;
         encounterSelect.addEventListener('change', async (e)=>{
