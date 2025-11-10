@@ -380,20 +380,10 @@ class UserDataManager {
             this.appearWindow.count = 0;
         }
         this.appearWindow.count += count;
-        const trigger = (count >= INSTANT_THRESHOLD) || (this.appearWindow.count >= CUMULATIVE_THRESHOLD);
-        if (trigger) {
-            try { this.addEvent('scene_change_inferred', { reason: 'appear_burst', instant: count, windowCount: this.appearWindow.count }); } catch (_) {}
-            // In scene-session mode, roll immediately
-            if (this.sceneSessionMode) {
-                this.clearAll();
-                try { this.addEvent('scene_rollover', { source: 'appear_burst' }); } catch (_) {}
-            } else {
-                this.requestClear();
-            }
-            // reset window to avoid multiple triggers
-            this.appearWindow.startTs = now;
-            this.appearWindow.count = 0;
-        }
+        // Disabled: do NOT infer scene changes from Appear bursts.
+        // We only roll scenes on explicit scene_change events from PacketInterceptor.
+        // Keep counters but take no action.
+        return;
     }
 
     setProfession(uid, profession) {
